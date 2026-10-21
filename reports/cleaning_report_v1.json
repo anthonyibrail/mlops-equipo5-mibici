@@ -1,0 +1,69 @@
+{
+  "filas_v0": 12540018,
+  "filas_v1": 12087719,
+  "reglas": [
+    {
+      "regla": "duplicados",
+      "justificacion": "Registro repetido con el mismo viaje_id",
+      "filas_afectadas": 758,
+      "pct": 0.006,
+      "accion": "eliminar"
+    },
+    {
+      "regla": "fecha_invalida",
+      "justificacion": "Inicio o fin vacio o no interpretable",
+      "filas_afectadas": 0,
+      "pct": 0.0,
+      "accion": "eliminar"
+    },
+    {
+      "regla": "fin_antes_de_inicio",
+      "justificacion": "Duracion negativa",
+      "filas_afectadas": 0,
+      "pct": 0.0,
+      "accion": "eliminar"
+    },
+    {
+      "regla": "estacion_desconocida",
+      "justificacion": "Origen o destino no existe en el catalogo de estaciones",
+      "filas_afectadas": 3954,
+      "pct": 0.032,
+      "accion": "eliminar"
+    },
+    {
+      "regla": "viaje_fantasma",
+      "justificacion": "Misma estacion de origen y destino en menos de 2 min (bicicleta retirada y devuelta: no es un viaje)",
+      "filas_afectadas": 414345,
+      "pct": 3.304,
+      "accion": "eliminar"
+    },
+    {
+      "regla": "velocidad_imposible",
+      "justificacion": "Entre estaciones distintas con velocidad media > 30 km/h (incluye duracion 0)",
+      "filas_afectadas": 31852,
+      "pct": 0.254,
+      "accion": "eliminar"
+    },
+    {
+      "regla": "duracion_outlier",
+      "justificacion": "Duracion mayor a 180 min",
+      "filas_afectadas": 1390,
+      "pct": 0.011,
+      "accion": "eliminar"
+    },
+    {
+      "regla": "anio_nacimiento_invalido -> NA",
+      "justificacion": "Fuera de [1930, anio_viaje - 12]; el viaje se conserva",
+      "filas_afectadas": 1775,
+      "pct": 0.014,
+      "accion": "corregir"
+    },
+    {
+      "regla": "genero_faltante -> 'Desconocido'",
+      "justificacion": "NULL o vacio; el viaje se conserva",
+      "filas_afectadas": 88234,
+      "pct": 0.704,
+      "accion": "corregir"
+    }
+  ]
+}
