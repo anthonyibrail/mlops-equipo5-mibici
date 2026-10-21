@@ -23,6 +23,12 @@ app = typer.Typer()
 OPEN_DATA_URL = "https://mibici.net/en/open-data/"
 BASE_URL = "https://mibici.net"
 STATIONS_FILE = "nomenclatura_2026_09.csv"
+# El servidor de MiBici (Mod_Security) rechaza con 406 el User-Agent por defecto de requests.
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,text/csv,*/*",
+}
 
 # Los encabezados cambian entre archivos (acentos y codificacion corruptos),
 # pero el orden de las 8 columnas es siempre el mismo: se renombran por posicion.
@@ -33,17 +39,32 @@ TRIP_COLUMNS = [
 DATE_FORMATS = ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M")  # sep-oct 2024 vienen sin segundos
 
 
+def _get(url: str, timeout: int = 60) -> requests.Response:
+    """GET con encabezados de navegador; falla con un error claro si el servidor rechaza."""
+    response = requests.get(url, headers=HEADERS, timeout=timeout)
+    response.raise_for_status()
+    return response
+
+
 class MiBiciDownloader:
     """Descarga los CSV mensuales publicados en el portal de datos abiertos."""
 
     def __init__(self, out_dir: Path = RAW_DATA_DIR):
         self.out_dir = out_dir
         self.out_dir.mkdir(parents=True, exist_ok=True)
+        self._html: str | None = None
+
+    @property
+    def html(self) -> str:
+        if self._html is None:
+            self._html = _get(OPEN_DATA_URL).text
+        return self._html
 
     def list_files(self) -> dict[str, str]:
         """Devuelve {'AAAA_MM': url} con todos los meses publicados."""
-        html = requests.get(OPEN_DATA_URL, timeout=60).text
-        paths = set(re.findall(r'/site/assets/files/\d+/datos_abiertos_\d{4}_\d{2}[^"]*\.csv', html))
+        paths = set(re.findall(r'/site/assets/files/\d+/datos_abiertos_\d{4}_\d{2}[^"]*\.csv', self.html))
+        if not paths:
+            raise RuntimeError(f"No se encontraron CSV de viajes en {OPEN_DATA_URL}")
         return {re.search(r"(\d{4}_\d{2})", p).group(1): BASE_URL + p for p in paths}
 
     def download(self, start: str, end: str) -> list[Path]:
@@ -56,15 +77,16 @@ class MiBiciDownloader:
         for name, url in tqdm(targets, desc="Descargando"):
             path = self.out_dir / name
             if not path.exists():
-                path.write_bytes(requests.get(url, timeout=600).content)
+                path.write_bytes(_get(url, timeout=600).content)
             saved.append(path)
         logger.info(f"{len(saved)} archivos en {self.out_dir}")
         return saved
 
-    @staticmethod
-    def list_stations_url() -> str:
-        html = requests.get(OPEN_DATA_URL, timeout=60).text
-        return BASE_URL + re.search(r'/site/assets/files/\d+/nomenclatura_[^"]*\.csv', html).group(0)
+    def list_stations_url(self) -> str:
+        match = re.search(r'/site/assets/files/\d+/nomenclatura_[^"]*\.csv', self.html)
+        if match is None:
+            raise RuntimeError(f"No se encontro el catalogo de estaciones en {OPEN_DATA_URL}")
+        return BASE_URL + match.group(0)
 
 
 class MiBiciLoader:
