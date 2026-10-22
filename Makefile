@@ -60,6 +60,25 @@ create_environment:
 # PROJECT RULES                                                                 #
 #################################################################################
 
+## Descargar datos de MiBici (ene-2024 a sep-2026) a data/raw
+.PHONY: download
+download:
+	$(PYTHON_INTERPRETER) -m mibici.dataset download --start 2024-01 --end 2026-09
+
+## Pipeline de datos: v0 (crudo unificado) -> v1 (limpio) y registro en MLflow
+.PHONY: data
+data:
+	$(PYTHON_INTERPRETER) -m mibici.dataset build
+	$(PYTHON_INTERPRETER) -m mibici.cleaning
+	$(PYTHON_INTERPRETER) -m mibici.versioning v0
+	$(PYTHON_INTERPRETER) -m mibici.versioning v1 --parent v0
+
+## Experimento baseline sobre las versiones del dataset
+.PHONY: baseline
+baseline:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.baseline
+
+
 
 ## Make dataset
 .PHONY: data

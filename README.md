@@ -6,6 +6,30 @@
 
 Prediccion de demanda horaria por estacion del sistema MiBici (Guadalajara) aplicando MLOps
 
+**Equipo 5 · TC5044 Operaciones de aprendizaje automático**
+
+Datos: [MiBici, datos abiertos](https://mibici.net/en/open-data/) (enero 2024 a septiembre 2026, ~12.5 M viajes).
+Análisis de requerimientos: [`docs/ml_canvas.md`](docs/ml_canvas.md).
+
+## Cómo reproducir (Fase 1)
+
+```bash
+python -m venv venv && venv\Scripts\activate      # Windows
+pip install -r requirements.txt
+
+python -m mibici.dataset download                 # 1. descarga CSV mensuales a data/raw
+python -m mibici.dataset build                    # 2. v0: crudo unificado (data/interim/trips_v0.parquet)
+python -m mibici.cleaning                         # 3. v1: limpio + reports/cleaning_report_v1.json
+python -m mibici.versioning v0                    # 4. registra versiones en MLflow
+python -m mibici.versioning v1 --parent v0
+python -m mibici.modeling.baseline                # 5. experimento baseline v0 vs v1
+pytest tests                                      # pruebas de carga y limpieza
+
+mlflow ui --backend-store-uri sqlite:///mlflow.db # ver versiones y experimentos
+```
+
+Con `make` instalado: `make download`, `make data`, `make baseline`, `make test`.
+
 ## Project Organization
 
 ```
