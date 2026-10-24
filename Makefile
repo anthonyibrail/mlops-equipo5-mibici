@@ -78,12 +78,15 @@ data:
 baseline:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.baseline
 
+## Feature engineering: trips_v1 -> demand_features_v2 + registro MLflow v2
+.PHONY: features
+features:
+	$(PYTHON_INTERPRETER) -m mibici.features
+	$(PYTHON_INTERPRETER) -m mibici.versioning v2 --parent v1 --date-col hora_inicio
 
-
-## Make dataset
-.PHONY: data
-data: requirements
-	$(PYTHON_INTERPRETER) mibici/dataset.py
+## Pipeline completo: descarga, datos, features y baseline
+.PHONY: pipeline
+pipeline: data features baseline
 
 
 #################################################################################

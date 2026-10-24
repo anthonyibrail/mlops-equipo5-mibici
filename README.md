@@ -22,13 +22,16 @@ python -m mibici.dataset build                    # 2. v0: crudo unificado (data
 python -m mibici.cleaning                         # 3. v1: limpio + reports/cleaning_report_v1.json
 python -m mibici.versioning v0                    # 4. registra versiones en MLflow
 python -m mibici.versioning v1 --parent v0
-python -m mibici.modeling.baseline                # 5. experimento baseline v0 vs v1
-pytest tests                                      # pruebas de carga y limpieza
+python -m mibici.features                         # 5. v2: panel de features (data/processed/demand_features_v2.parquet)
+python -m mibici.versioning v2 --parent v1 --date-col hora_inicio
+python -m mibici.modeling.baseline                # 6. experimento baseline v0 vs v1
+pytest tests                                      # pruebas de carga, limpieza y features
 
 mlflow ui --backend-store-uri sqlite:///mlflow.db # ver versiones y experimentos
 ```
 
-Con `make` instalado: `make download`, `make data`, `make baseline`, `make test`.
+Con `make` instalado: `make download`, `make data`, `make features`, `make baseline`, `make test`.
+O bien `make pipeline` para ejecutar `data`, `features` y `baseline` en secuencia.
 
 ## Project Organization
 

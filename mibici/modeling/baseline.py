@@ -18,6 +18,7 @@ import typer
 from loguru import logger
 
 from mibici.config import INTERIM_DATA_DIR
+from mibici.features import hourly_demand
 from mibici.versioning import TRACKING_URI
 
 app = typer.Typer()
@@ -25,14 +26,6 @@ app = typer.Typer()
 EXPERIMENT = "mibici-baseline-versiones"
 TEST_MONTHS = 3
 SEASON_H = 24 * 7
-
-
-def hourly_demand(df: pd.DataFrame) -> pd.DataFrame:
-    """Matriz hora x estacion con el numero de viajes que inician (0 si no hubo)."""
-    hours = df["inicio"].dt.floor("h")
-    counts = df.groupby([hours, "origen_id"]).size().unstack(fill_value=0)
-    full = pd.date_range(counts.index.min(), counts.index.max(), freq="h")
-    return counts.reindex(full, fill_value=0)
 
 
 def seasonal_naive_scores(demand: pd.DataFrame, test_start: pd.Timestamp) -> dict:
