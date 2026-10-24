@@ -84,9 +84,14 @@ features:
 	$(PYTHON_INTERPRETER) -m mibici.features
 	$(PYTHON_INTERPRETER) -m mibici.versioning v2 --parent v1 --date-col hora_inicio
 
-## Pipeline completo: descarga, datos, features y baseline
+## Generar plots de EDA y registrar en MLflow
+.PHONY: plots
+plots:
+	$(PYTHON_INTERPRETER) -m mibici.plots
+
+## Pipeline completo: descarga, datos, features, baseline y plots
 .PHONY: pipeline
-pipeline: data features baseline
+pipeline: data features baseline plots
 
 
 #################################################################################
