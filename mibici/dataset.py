@@ -7,14 +7,14 @@ Uso:
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
+import re
 
+from loguru import logger
 import pandas as pd
 import requests
-import typer
-from loguru import logger
 from tqdm import tqdm
+import typer
 
 from mibici.config import INTERIM_DATA_DIR, RAW_DATA_DIR
 
@@ -26,15 +26,21 @@ STATIONS_FILE = "nomenclatura_2026_09.csv"
 # El servidor de MiBici (Mod_Security) rechaza con 406 el User-Agent por defecto de requests.
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,text/csv,*/*",
 }
 
 # Los encabezados cambian entre archivos (acentos y codificacion corruptos),
 # pero el orden de las 8 columnas es siempre el mismo: se renombran por posicion.
 TRIP_COLUMNS = [
-    "viaje_id", "usuario_id", "genero", "anio_nacimiento",
-    "inicio", "fin", "origen_id", "destino_id",
+    "viaje_id",
+    "usuario_id",
+    "genero",
+    "anio_nacimiento",
+    "inicio",
+    "fin",
+    "origen_id",
+    "destino_id",
 ]
 DATE_FORMATS = ("%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M")  # sep-oct 2024 vienen sin segundos
 
@@ -62,7 +68,9 @@ class MiBiciDownloader:
 
     def list_files(self) -> dict[str, str]:
         """Devuelve {'AAAA_MM': url} con todos los meses publicados."""
-        paths = set(re.findall(r'/site/assets/files/\d+/datos_abiertos_\d{4}_\d{2}[^"]*\.csv', self.html))
+        paths = set(
+            re.findall(r'/site/assets/files/\d+/datos_abiertos_\d{4}_\d{2}[^"]*\.csv', self.html)
+        )
         if not paths:
             raise RuntimeError(f"No se encontraron CSV de viajes en {OPEN_DATA_URL}")
         return {re.search(r"(\d{4}_\d{2})", p).group(1): BASE_URL + p for p in paths}
@@ -117,8 +125,9 @@ class MiBiciLoader:
 
     def read_month(self, path: Path) -> pd.DataFrame:
         enc = self._detect_encoding(path)
-        df = pd.read_csv(path, encoding=enc, header=0, names=TRIP_COLUMNS,
-                         dtype=str, keep_default_na=False)
+        df = pd.read_csv(
+            path, encoding=enc, header=0, names=TRIP_COLUMNS, dtype=str, keep_default_na=False
+        )
         df["archivo"] = re.search(r"(\d{4}_\d{2})", path.name).group(1)
         df["fecha_con_segundos"] = df["inicio"].str.count(":") == 2
         return df
@@ -127,8 +136,9 @@ class MiBiciLoader:
         files = sorted(self.raw_dir.glob("datos_abiertos_*.csv"))
         if not files:
             raise FileNotFoundError(f"No hay CSV de viajes en {self.raw_dir}")
-        df = pd.concat([self.read_month(f) for f in tqdm(files, desc="Leyendo")],
-                       ignore_index=True)
+        df = pd.concat(
+            [self.read_month(f) for f in tqdm(files, desc="Leyendo")], ignore_index=True
+        )
         df["inicio"] = self._parse_dates(df["inicio"])
         df["fin"] = self._parse_dates(df["fin"])
         for col in ["viaje_id", "usuario_id", "anio_nacimiento", "origen_id", "destino_id"]:
@@ -139,10 +149,19 @@ class MiBiciLoader:
         return df
 
     def load_stations(self) -> pd.DataFrame:
-        st = pd.read_csv(self.raw_dir / STATIONS_FILE, encoding=self._detect_encoding(
-            self.raw_dir / STATIONS_FILE))
-        return st.rename(columns={"id": "estacion_id", "name": "nombre", "latitude": "lat",
-                                  "longitude": "lon", "dpcapacity": "capacidad"})
+        st = pd.read_csv(
+            self.raw_dir / STATIONS_FILE,
+            encoding=self._detect_encoding(self.raw_dir / STATIONS_FILE),
+        )
+        return st.rename(
+            columns={
+                "id": "estacion_id",
+                "name": "nombre",
+                "latitude": "lat",
+                "longitude": "lon",
+                "dpcapacity": "capacidad",
+            }
+        )
 
 
 @app.command()

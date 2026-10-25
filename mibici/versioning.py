@@ -20,31 +20,39 @@ import json
 import os
 from pathlib import Path
 
+from loguru import logger
 import mlflow
 import pandas as pd
 import typer
-from loguru import logger
 
 from mibici.config import INTERIM_DATA_DIR, PROCESSED_DATA_DIR, PROJ_ROOT, REPORTS_DIR
 
 app = typer.Typer()
 
-TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", f"sqlite:///{(PROJ_ROOT / 'mlflow.db').as_posix()}")
+TRACKING_URI = os.getenv(
+    "MLFLOW_TRACKING_URI", f"sqlite:///{(PROJ_ROOT / 'mlflow.db').as_posix()}"
+)
 EXPERIMENT = "mibici-datasets"
 
 VERSIONS = {
-    "v0": ("trips_v0.parquet",
-           "Crudo unificado: 33 CSV mensuales con esquema, codificacion "
-           "y formato de fecha homologados. Sin eliminar filas.",
-           None),
-    "v1": ("trips_v1.parquet",
-           "Limpio: reglas de cleaning.py aplicadas sobre v0.",
-           "cleaning_report_v1.json"),
-    "v2": ("demand_features_v2.parquet",
-           "Features: panel (hora_inicio x estacion_id) con features temporales, "
-           "de rezago (1h, 24h, 168h), media movil 7d, demanda del sistema y "
-           "atributos estaticos de estacion. Generado desde trips_v1 con features.py.",
-           None),
+    "v0": (
+        "trips_v0.parquet",
+        "Crudo unificado: 33 CSV mensuales con esquema, codificacion "
+        "y formato de fecha homologados. Sin eliminar filas.",
+        None,
+    ),
+    "v1": (
+        "trips_v1.parquet",
+        "Limpio: reglas de cleaning.py aplicadas sobre v0.",
+        "cleaning_report_v1.json",
+    ),
+    "v2": (
+        "demand_features_v2.parquet",
+        "Features: panel (hora_inicio x estacion_id) con features temporales, "
+        "de rezago (1h, 24h, 168h), media movil 7d, demanda del sistema y "
+        "atributos estaticos de estacion. Generado desde trips_v1 con features.py.",
+        None,
+    ),
 }
 
 
@@ -57,8 +65,14 @@ def file_sha256(path: Path, chunk: int = 1 << 20) -> str:
 
 
 def column_profile(df: pd.DataFrame) -> dict:
-    return {c: {"dtype": str(df[c].dtype), "nulos": int(df[c].isna().sum()),
-                "unicos": int(df[c].nunique())} for c in df.columns}
+    return {
+        c: {
+            "dtype": str(df[c].dtype),
+            "nulos": int(df[c].isna().sum()),
+            "unicos": int(df[c].nunique()),
+        }
+        for c in df.columns
+    }
 
 
 class DatasetVersioner:
@@ -66,9 +80,16 @@ class DatasetVersioner:
         mlflow.set_tracking_uri(tracking_uri)
         mlflow.set_experiment(experiment)
 
-    def log_version(self, df: pd.DataFrame, path: Path, version: str, description: str,
-                    parent: str | None = None, report: Path | None = None,
-                    date_col: str = "inicio") -> str:
+    def log_version(
+        self,
+        df: pd.DataFrame,
+        path: Path,
+        version: str,
+        description: str,
+        parent: str | None = None,
+        report: Path | None = None,
+        date_col: str = "inicio",
+    ) -> str:
         """Registra una version del dataset como run de MLflow.
 
         Args:
@@ -85,18 +106,26 @@ class DatasetVersioner:
         station_col = "origen_id" if "origen_id" in df.columns else "estacion_id"
 
         with mlflow.start_run(run_name=f"dataset_{version}") as run:
-            mlflow.set_tags({"dataset_version": version, "parent_version": parent or "-",
-                             "stage": "data", "mlflow.note.content": description})
-            mlflow.log_params({
-                "version": version,
-                "rows": len(df),
-                "columns": df.shape[1],
-                "date_min": str(df[date_col].min()),
-                "date_max": str(df[date_col].max()),
-                "stations": int(df[station_col].nunique()),
-                "sha256": file_sha256(path),
-                "path": path.relative_to(PROJ_ROOT).as_posix(),
-            })
+            mlflow.set_tags(
+                {
+                    "dataset_version": version,
+                    "parent_version": parent or "-",
+                    "stage": "data",
+                    "mlflow.note.content": description,
+                }
+            )
+            mlflow.log_params(
+                {
+                    "version": version,
+                    "rows": len(df),
+                    "columns": df.shape[1],
+                    "date_min": str(df[date_col].min()),
+                    "date_max": str(df[date_col].max()),
+                    "stations": int(df[station_col].nunique()),
+                    "sha256": file_sha256(path),
+                    "path": path.relative_to(PROJ_ROOT).as_posix(),
+                }
+            )
             mlflow.log_metric("rows", len(df))
             self._log_input(df, path, version)
             mlflow.log_dict(column_profile(df), f"profile_{version}.json")
@@ -123,7 +152,9 @@ class DatasetVersioner:
             elif dtype_str == "category":
                 light[c] = light[c].astype(str)
         try:
-            ds = mlflow.data.from_pandas(light, source=path.as_posix(), name=f"mibici_trips_{version}")
+            ds = mlflow.data.from_pandas(
+                light, source=path.as_posix(), name=f"mibici_trips_{version}"
+            )
             mlflow.log_input(ds, context=version)
         except Exception as exc:  # el resto del registro sigue siendo valido
             logger.warning(f"No se pudo registrar el input dataset: {exc}")

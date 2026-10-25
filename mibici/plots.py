@@ -20,16 +20,17 @@ Usage:
 from __future__ import annotations
 
 import matplotlib
+
 matplotlib.use("Agg")  # headless: no display required
 
+from pathlib import Path
+
+from loguru import logger
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import mlflow
-import numpy as np
 import pandas as pd
 import typer
-from loguru import logger
-from pathlib import Path
 
 from mibici.config import FIGURES_DIR, INTERIM_DATA_DIR, PROCESSED_DATA_DIR, RAW_DATA_DIR
 from mibici.dataset import MiBiciLoader
@@ -38,7 +39,7 @@ from mibici.versioning import TRACKING_URI
 app = typer.Typer()
 
 EDA_EXPERIMENT = "mibici-eda"
-CORR_SAMPLE = 200_000   # rows sampled for correlation (stable estimate, fast)
+CORR_SAMPLE = 200_000  # rows sampled for correlation (stable estimate, fast)
 DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 # Numeric features considered for correlation with the target
@@ -62,19 +63,22 @@ NUMERIC_FEATURES = [
 
 def _setup_style() -> None:
     """Apply a consistent, clean style to all plots."""
-    plt.rcParams.update({
-        "figure.dpi": 120,
-        "axes.spines.top": False,
-        "axes.spines.right": False,
-        "axes.grid": True,
-        "grid.alpha": 0.3,
-        "font.size": 10,
-    })
+    plt.rcParams.update(
+        {
+            "figure.dpi": 120,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "axes.grid": True,
+            "grid.alpha": 0.3,
+            "font.size": 10,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Plot 1: Mean demand by hour of day
 # ---------------------------------------------------------------------------
+
 
 def plot_hourly_demand(df: pd.DataFrame, output_dir: Path) -> Path:
     """Line chart of mean demand by hour, weekday vs weekend.
@@ -91,8 +95,9 @@ def plot_hourly_demand(df: pd.DataFrame, output_dir: Path) -> Path:
 
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(weekdays.index, weekdays.values, label="Weekday", lw=2, color="#2166ac")
-    ax.plot(weekends.index, weekends.values, label="Weekend", lw=2,
-            color="#d6604d", linestyle="--")
+    ax.plot(
+        weekends.index, weekends.values, label="Weekend", lw=2, color="#d6604d", linestyle="--"
+    )
 
     # Shade peak hours
     for lo, hi in [(7, 9), (17, 19)]:
@@ -115,6 +120,7 @@ def plot_hourly_demand(df: pd.DataFrame, output_dir: Path) -> Path:
 # Plot 2: Hour x day-of-week demand heatmap
 # ---------------------------------------------------------------------------
 
+
 def plot_dow_hour_heatmap(df: pd.DataFrame, output_dir: Path) -> Path:
     """Heatmap of mean demand by hour (rows) and day of week (columns).
 
@@ -125,15 +131,16 @@ def plot_dow_hour_heatmap(df: pd.DataFrame, output_dir: Path) -> Path:
     Returns:
         Path to the saved figure.
     """
-    pivot = (df.groupby(["hora", "dia_semana"])["demanda"]
-             .mean()
-             .unstack("dia_semana"))   # shape: (24 hours, 7 days)
+    pivot = (
+        df.groupby(["hora", "dia_semana"])["demanda"].mean().unstack("dia_semana")
+    )  # shape: (24 hours, 7 days)
 
     fig, ax = plt.subplots(figsize=(10, 7))
-    ax.grid(False)   # grid lines clash with heatmap cells
+    ax.grid(False)  # grid lines clash with heatmap cells
 
-    im = ax.imshow(pivot.values, aspect="auto", cmap="YlOrRd", origin="upper",
-                   interpolation="nearest")
+    im = ax.imshow(
+        pivot.values, aspect="auto", cmap="YlOrRd", origin="upper", interpolation="nearest"
+    )
     plt.colorbar(im, ax=ax, label="Mean trips started")
 
     ax.set_xticks(range(7))
@@ -155,6 +162,7 @@ def plot_dow_hour_heatmap(df: pd.DataFrame, output_dir: Path) -> Path:
 # Plot 3: Monthly total demand trend
 # ---------------------------------------------------------------------------
 
+
 def plot_monthly_trend(df: pd.DataFrame, output_dir: Path) -> Path:
     """Line chart of total system demand per calendar month.
 
@@ -165,22 +173,21 @@ def plot_monthly_trend(df: pd.DataFrame, output_dir: Path) -> Path:
     Returns:
         Path to the saved figure.
     """
-    monthly = (df.groupby(df["hora_inicio"].dt.to_period("M"))["demanda"]
-               .sum()
-               .sort_index())
+    monthly = df.groupby(df["hora_inicio"].dt.to_period("M"))["demanda"].sum().sort_index()
     monthly.index = monthly.index.to_timestamp()
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(monthly.index, monthly.values, marker="o", markersize=4,
-            lw=2, color="#2166ac")
+    ax.plot(monthly.index, monthly.values, marker="o", markersize=4, lw=2, color="#2166ac")
     ax.fill_between(monthly.index, monthly.values, alpha=0.15, color="#2166ac")
 
     ax.set_xlabel("Month")
     ax.set_ylabel("Total trips started")
     ax.set_title("Monthly total system demand")
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(
-        lambda x, _: f"{x/1_000_000:.1f}M" if x >= 1_000_000 else f"{x/1000:.0f}K"
-    ))
+    ax.yaxis.set_major_formatter(
+        mticker.FuncFormatter(
+            lambda x, _: f"{x / 1_000_000:.1f}M" if x >= 1_000_000 else f"{x / 1000:.0f}K"
+        )
+    )
     fig.autofmt_xdate()
 
     path = output_dir / "03_tendencia_mensual.png"
@@ -194,8 +201,8 @@ def plot_monthly_trend(df: pd.DataFrame, output_dir: Path) -> Path:
 # Plot 4: Top 10 stations by mean hourly demand
 # ---------------------------------------------------------------------------
 
-def plot_station_demand(df: pd.DataFrame, stations: pd.DataFrame,
-                        output_dir: Path) -> Path:
+
+def plot_station_demand(df: pd.DataFrame, stations: pd.DataFrame, output_dir: Path) -> Path:
     """Horizontal bar chart of the top 10 stations by mean hourly demand.
 
     Args:
@@ -206,15 +213,11 @@ def plot_station_demand(df: pd.DataFrame, stations: pd.DataFrame,
     Returns:
         Path to the saved figure.
     """
-    station_avg = (df.groupby("estacion_id")["demanda"]
-                   .mean()
-                   .reset_index(name="demanda_media"))
+    station_avg = df.groupby("estacion_id")["demanda"].mean().reset_index(name="demanda_media")
     station_avg = station_avg.merge(
         stations[["estacion_id", "nombre"]], on="estacion_id", how="left"
     )
-    station_avg["nombre"] = station_avg["nombre"].fillna(
-        station_avg["estacion_id"].astype(str)
-    )
+    station_avg["nombre"] = station_avg["nombre"].fillna(station_avg["estacion_id"].astype(str))
 
     top10 = station_avg.nlargest(10, "demanda_media").sort_values("demanda_media")
 
@@ -234,6 +237,7 @@ def plot_station_demand(df: pd.DataFrame, stations: pd.DataFrame,
 # ---------------------------------------------------------------------------
 # Plot 5: Trip duration distribution
 # ---------------------------------------------------------------------------
+
 
 def plot_duration_hist(trips_df: pd.DataFrame, output_dir: Path) -> Path:
     """Histogram of trip durations from the cleaned trips dataset.
@@ -257,17 +261,13 @@ def plot_duration_hist(trips_df: pd.DataFrame, output_dir: Path) -> Path:
     # Mark median and 95th percentile
     p50 = float(d.median())
     p95 = float(d.quantile(0.95))
-    ax.axvline(p50, color="#d6604d", lw=1.5, linestyle="--",
-               label=f"Median: {p50:.1f} min")
-    ax.axvline(p95, color="#f4a582", lw=1.5, linestyle=":",
-               label=f"p95: {p95:.1f} min")
+    ax.axvline(p50, color="#d6604d", lw=1.5, linestyle="--", label=f"Median: {p50:.1f} min")
+    ax.axvline(p95, color="#f4a582", lw=1.5, linestyle=":", label=f"p95: {p95:.1f} min")
 
     ax.set_xlabel("Trip duration (min)")
     ax.set_ylabel("Trips")
     ax.set_title(f"Trip duration distribution (showing <= 60 min, {pct_shown:.1f}% of trips)")
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(
-        lambda x, _: f"{int(x):,}"
-    ))
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
     ax.legend()
 
     path = output_dir / "05_duracion_viajes.png"
@@ -281,9 +281,10 @@ def plot_duration_hist(trips_df: pd.DataFrame, output_dir: Path) -> Path:
 # Correlation analysis
 # ---------------------------------------------------------------------------
 
-def compute_correlation(df: pd.DataFrame,
-                        sample_n: int = CORR_SAMPLE,
-                        seed: int = 42) -> pd.Series:
+
+def compute_correlation(
+    df: pd.DataFrame, sample_n: int = CORR_SAMPLE, seed: int = 42
+) -> pd.Series:
     """Pearson correlation of each numeric feature with the target 'demanda'.
 
     Samples the DataFrame first for performance. NaN rows (early periods
@@ -299,13 +300,13 @@ def compute_correlation(df: pd.DataFrame,
         value in descending order.
     """
     cols = ["demanda"] + [c for c in NUMERIC_FEATURES if c in df.columns]
-    sample = (df[cols]
-              .dropna()
-              .sample(min(sample_n, len(df)), random_state=seed))
-    corr = (sample.corr()["demanda"]
-            .drop("demanda")
-            .dropna()   # features with zero variance have undefined (NaN) correlation
-            .sort_values(key=lambda s: s.abs(), ascending=False))
+    sample = df[cols].dropna().sample(min(sample_n, len(df)), random_state=seed)
+    corr = (
+        sample.corr()["demanda"]
+        .drop("demanda")
+        .dropna()  # features with zero variance have undefined (NaN) correlation
+        .sort_values(key=lambda s: s.abs(), ascending=False)
+    )
     return corr
 
 
@@ -340,8 +341,8 @@ def plot_correlation_bar(corr: pd.Series, output_dir: Path) -> Path:
 # MLflow logging
 # ---------------------------------------------------------------------------
 
-def _log_to_mlflow(figures: list[Path], corr: pd.Series,
-                   tracking_uri: str = TRACKING_URI) -> str:
+
+def _log_to_mlflow(figures: list[Path], corr: pd.Series, tracking_uri: str = TRACKING_URI) -> str:
     """Log all figures as artifacts and correlation values as metrics.
 
     Args:
@@ -367,6 +368,7 @@ def _log_to_mlflow(figures: list[Path], corr: pd.Series,
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 @app.command()
 def main(
@@ -403,9 +405,7 @@ def main(
     logger.info("Logging to MLflow...")
     _log_to_mlflow(saved, corr)
 
-    logger.success(
-        f"Done: {len(saved)} figures saved to {figures_dir}"
-    )
+    logger.success(f"Done: {len(saved)} figures saved to {figures_dir}")
 
 
 if __name__ == "__main__":

@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from loguru import logger
 import pandas as pd
 import typer
-from loguru import logger
 
 from mibici.config import INTERIM_DATA_DIR, PROCESSED_DATA_DIR, RAW_DATA_DIR
 from mibici.dataset import MiBiciLoader
@@ -48,9 +48,7 @@ def hourly_demand(df: pd.DataFrame) -> pd.DataFrame:
     """
     hours = df["inicio"].dt.floor("h")
     counts = df.groupby([hours, "origen_id"]).size().unstack(fill_value=0)
-    full = pd.date_range(
-        counts.index.min(), counts.index.max(), freq="h", name="hora_inicio"
-    )
+    full = pd.date_range(counts.index.min(), counts.index.max(), freq="h", name="hora_inicio")
     result = counts.reindex(full, fill_value=0)
     result.columns.name = "estacion_id"
     return result
@@ -73,13 +71,11 @@ def build_features(demand: pd.DataFrame, stations: pd.DataFrame) -> pd.DataFrame
     """
     # --- 1. Calcular todos los features de rezago en formato ancho ---
     wide = {
-        "demanda":          demand,
-        "demanda_lag_1h":   demand.shift(1),
-        "demanda_lag_24h":  demand.shift(24),
+        "demanda": demand,
+        "demanda_lag_1h": demand.shift(1),
+        "demanda_lag_24h": demand.shift(24),
         "demanda_lag_168h": demand.shift(168),
-        "media_7d":         demand.shift(1).rolling(
-                                window=ROLLING_WINDOW_H, min_periods=1
-                            ).mean(),
+        "media_7d": demand.shift(1).rolling(window=ROLLING_WINDOW_H, min_periods=1).mean(),
     }
 
     # Demanda total del sistema en t-1 (igual para todas las estaciones en t)
@@ -95,12 +91,12 @@ def build_features(demand: pd.DataFrame, stations: pd.DataFrame) -> pd.DataFrame
     df["demanda_sistema_lag_1h"] = df["hora_inicio"].map(system_lag_1h)
 
     # --- 3. Features temporales ---
-    df["hora"]             = df["hora_inicio"].dt.hour.astype("int8")
-    df["dia_semana"]       = df["hora_inicio"].dt.dayofweek.astype("int8")
-    df["mes"]              = df["hora_inicio"].dt.month.astype("int8")
+    df["hora"] = df["hora_inicio"].dt.hour.astype("int8")
+    df["dia_semana"] = df["hora_inicio"].dt.dayofweek.astype("int8")
+    df["mes"] = df["hora_inicio"].dt.month.astype("int8")
     df["es_fin_de_semana"] = df["dia_semana"] >= 5
-    df["es_hora_pico_manana"]  = df["hora"].isin(PEAK_HOURS_MORNING)
-    df["es_hora_pico_tarde"]   = df["hora"].isin(PEAK_HOURS_AFTERNOON)
+    df["es_hora_pico_manana"] = df["hora"].isin(PEAK_HOURS_MORNING)
+    df["es_hora_pico_tarde"] = df["hora"].isin(PEAK_HOURS_AFTERNOON)
 
     # --- 4. Atributos estaticos de la estacion ---
     st_cols = stations.set_index("estacion_id")[["capacidad", "lat", "lon"]]
@@ -133,8 +129,7 @@ def main(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     features.to_parquet(output_path, index=False)
     logger.success(
-        f"Guardado {output_path} "
-        f"({len(features):,} filas, {features.shape[1]} columnas)"
+        f"Guardado {output_path} ({len(features):,} filas, {features.shape[1]} columnas)"
     )
 
 
