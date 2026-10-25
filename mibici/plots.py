@@ -42,6 +42,12 @@ EDA_EXPERIMENT = "mibici-eda"
 CORR_SAMPLE = 200_000  # rows sampled for correlation (stable estimate, fast)
 DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
+# Paleta común de las gráficas: cambiar un color aquí lo cambia en todas
+COLOR_PRIMARY = "#2166ac"  # serie principal (azul)
+COLOR_SECONDARY = "#d6604d"  # serie de contraste y valores negativos (rojo)
+COLOR_ACCENT = "#f4a582"  # marcas secundarias (naranja claro)
+COLOR_HIGHLIGHT = "#fdae61"  # sombreado de horas pico
+
 # Numeric features considered for correlation with the target
 NUMERIC_FEATURES = [
     "demanda_lag_1h",
@@ -75,6 +81,22 @@ def _setup_style() -> None:
     )
 
 
+def _save_figure(fig: plt.Figure, path: Path) -> Path:
+    """Guarda la figura en path, libera la memoria y registra el archivo en el log.
+
+    Args:
+        fig: Figura de matplotlib ya construida.
+        path: Ruta del PNG de salida.
+
+    Returns:
+        La misma ruta, para encadenar con la lista de figuras generadas.
+    """
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"Saved {path.name}")
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Plot 1: Mean demand by hour of day
 # ---------------------------------------------------------------------------
@@ -94,14 +116,19 @@ def plot_hourly_demand(df: pd.DataFrame, output_dir: Path) -> Path:
     weekends = df[df["dia_semana"] >= 5].groupby("hora")["demanda"].mean()
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(weekdays.index, weekdays.values, label="Weekday", lw=2, color="#2166ac")
+    ax.plot(weekdays.index, weekdays.values, label="Weekday", lw=2, color=COLOR_PRIMARY)
     ax.plot(
-        weekends.index, weekends.values, label="Weekend", lw=2, color="#d6604d", linestyle="--"
+        weekends.index,
+        weekends.values,
+        label="Weekend",
+        lw=2,
+        color=COLOR_SECONDARY,
+        linestyle="--",
     )
 
     # Shade peak hours
     for lo, hi in [(7, 9), (17, 19)]:
-        ax.axvspan(lo, hi, alpha=0.10, color="#fdae61", label="_nolegend_")
+        ax.axvspan(lo, hi, alpha=0.10, color=COLOR_HIGHLIGHT, label="_nolegend_")
 
     ax.set_xlabel("Hour of day")
     ax.set_ylabel("Mean trips started")
@@ -109,11 +136,7 @@ def plot_hourly_demand(df: pd.DataFrame, output_dir: Path) -> Path:
     ax.set_xticks(range(0, 24, 2))
     ax.legend()
 
-    path = output_dir / "01_demanda_por_hora.png"
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Saved {path.name}")
-    return path
+    return _save_figure(fig, output_dir / "01_demanda_por_hora.png")
 
 
 # ---------------------------------------------------------------------------
@@ -151,11 +174,7 @@ def plot_dow_hour_heatmap(df: pd.DataFrame, output_dir: Path) -> Path:
     ax.set_ylabel("Hour of day")
     ax.set_title("Mean demand: hour x day of week")
 
-    path = output_dir / "02_heatmap_hora_dow.png"
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Saved {path.name}")
-    return path
+    return _save_figure(fig, output_dir / "02_heatmap_hora_dow.png")
 
 
 # ---------------------------------------------------------------------------
@@ -177,8 +196,8 @@ def plot_monthly_trend(df: pd.DataFrame, output_dir: Path) -> Path:
     monthly.index = monthly.index.to_timestamp()
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(monthly.index, monthly.values, marker="o", markersize=4, lw=2, color="#2166ac")
-    ax.fill_between(monthly.index, monthly.values, alpha=0.15, color="#2166ac")
+    ax.plot(monthly.index, monthly.values, marker="o", markersize=4, lw=2, color=COLOR_PRIMARY)
+    ax.fill_between(monthly.index, monthly.values, alpha=0.15, color=COLOR_PRIMARY)
 
     ax.set_xlabel("Month")
     ax.set_ylabel("Total trips started")
@@ -190,11 +209,7 @@ def plot_monthly_trend(df: pd.DataFrame, output_dir: Path) -> Path:
     )
     fig.autofmt_xdate()
 
-    path = output_dir / "03_tendencia_mensual.png"
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Saved {path.name}")
-    return path
+    return _save_figure(fig, output_dir / "03_tendencia_mensual.png")
 
 
 # ---------------------------------------------------------------------------
@@ -222,16 +237,12 @@ def plot_station_demand(df: pd.DataFrame, stations: pd.DataFrame, output_dir: Pa
     top10 = station_avg.nlargest(10, "demanda_media").sort_values("demanda_media")
 
     fig, ax = plt.subplots(figsize=(9, 6))
-    bars = ax.barh(top10["nombre"], top10["demanda_media"], color="#2166ac")
+    bars = ax.barh(top10["nombre"], top10["demanda_media"], color=COLOR_PRIMARY)
     ax.bar_label(bars, fmt="%.2f", padding=3, fontsize=8)
     ax.set_xlabel("Mean trips started per hour")
     ax.set_title("Top 10 stations by mean hourly demand")
 
-    path = output_dir / "04_top_estaciones.png"
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Saved {path.name}")
-    return path
+    return _save_figure(fig, output_dir / "04_top_estaciones.png")
 
 
 # ---------------------------------------------------------------------------
@@ -256,13 +267,13 @@ def plot_duration_hist(trips_df: pd.DataFrame, output_dir: Path) -> Path:
     pct_shown = 100 * len(d_focus) / len(d)
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    ax.hist(d_focus, bins=60, color="#2166ac", edgecolor="white", linewidth=0.3)
+    ax.hist(d_focus, bins=60, color=COLOR_PRIMARY, edgecolor="white", linewidth=0.3)
 
     # Mark median and 95th percentile
     p50 = float(d.median())
     p95 = float(d.quantile(0.95))
-    ax.axvline(p50, color="#d6604d", lw=1.5, linestyle="--", label=f"Median: {p50:.1f} min")
-    ax.axvline(p95, color="#f4a582", lw=1.5, linestyle=":", label=f"p95: {p95:.1f} min")
+    ax.axvline(p50, color=COLOR_SECONDARY, lw=1.5, linestyle="--", label=f"Median: {p50:.1f} min")
+    ax.axvline(p95, color=COLOR_ACCENT, lw=1.5, linestyle=":", label=f"p95: {p95:.1f} min")
 
     ax.set_xlabel("Trip duration (min)")
     ax.set_ylabel("Trips")
@@ -270,11 +281,7 @@ def plot_duration_hist(trips_df: pd.DataFrame, output_dir: Path) -> Path:
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
     ax.legend()
 
-    path = output_dir / "05_duracion_viajes.png"
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Saved {path.name}")
-    return path
+    return _save_figure(fig, output_dir / "05_duracion_viajes.png")
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +327,7 @@ def plot_correlation_bar(corr: pd.Series, output_dir: Path) -> Path:
     Returns:
         Path to the saved figure.
     """
-    colors = ["#2166ac" if v >= 0 else "#d6604d" for v in corr.values]
+    colors = [COLOR_PRIMARY if v >= 0 else COLOR_SECONDARY for v in corr.values]
 
     fig, ax = plt.subplots(figsize=(9, 7))
     bars = ax.barh(corr.index[::-1], corr.values[::-1], color=colors[::-1])
@@ -330,11 +337,7 @@ def plot_correlation_bar(corr: pd.Series, output_dir: Path) -> Path:
     ax.set_title("Feature correlation with target (demanda)")
     ax.set_xlim(-1, 1)
 
-    path = output_dir / "06_correlacion_features.png"
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
-    logger.info(f"Saved {path.name}")
-    return path
+    return _save_figure(fig, output_dir / "06_correlacion_features.png")
 
 
 # ---------------------------------------------------------------------------
