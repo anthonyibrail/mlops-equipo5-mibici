@@ -33,6 +33,9 @@ TRACKING_URI = os.getenv(
     "MLFLOW_TRACKING_URI", f"sqlite:///{(PROJ_ROOT / 'mlflow.db').as_posix()}"
 )
 EXPERIMENT = "mibici-datasets"
+# Filas usadas para construir el input dataset de MLflow (esquema y vista previa).
+# La identidad del dataset completo la dan el SHA-256 y el número de filas.
+INPUT_SAMPLE_ROWS = 10_000
 
 VERSIONS = {
     "v0": (
@@ -128,6 +131,7 @@ class DatasetVersioner:
                     "stations": int(df[station_col].nunique()),
                     "sha256": file_sha256(path),
                     "path": path.relative_to(PROJ_ROOT).as_posix(),
+                    "input_sample_rows": min(len(df), INPUT_SAMPLE_ROWS),
                 }
             )
             mlflow.log_metric("rows", len(df))
@@ -147,7 +151,10 @@ class DatasetVersioner:
         Convierte tipos que MLflow no puede inferir directamente (nullable types,
         tipos de baja precision) a float64/str antes de intentar el registro.
         """
-        light = df.copy()
+        # mlflow.data.from_pandas recorre todo el DataFrame para inferir esquema y perfil;
+        # con 12.5 M de filas eso dominaba el tiempo del registro y duplicaba la memoria
+        # (df.copy()). Para el esquema basta una muestra.
+        light = df.head(INPUT_SAMPLE_ROWS).copy()
         _non_standard = ("Int64", "boolean", "int8", "int16", "float32")
         for c in light.columns:
             dtype_str = str(light[c].dtype)
