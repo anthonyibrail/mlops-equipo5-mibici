@@ -92,7 +92,7 @@ def build_features(demand: pd.DataFrame, stations: pd.DataFrame) -> pd.DataFrame
 
     # --- 3. Features temporales ---
     df["hora"] = df["hora_inicio"].dt.hour.astype("int8")
-    df["dia_semana"] = df["hora_inicio"].dt.dayofweek.astype("int8")
+    df["dia_semana"] = df["hora_inicio"].dt.day_of_week.astype("int8")
     df["mes"] = df["hora_inicio"].dt.month.astype("int8")
     df["es_fin_de_semana"] = df["dia_semana"] >= 5
     df["es_hora_pico_manana"] = df["hora"].isin(PEAK_HOURS_MORNING)
