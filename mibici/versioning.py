@@ -37,8 +37,10 @@ EXPERIMENT = "mibici-datasets"
 VERSIONS = {
     "v0": (
         "trips_v0.parquet",
-        "Crudo unificado: 33 CSV mensuales con esquema, codificacion "
-        "y formato de fecha homologados. Sin eliminar filas.",
+        (
+            "Crudo unificado: 33 CSV mensuales con esquema, codificacion "
+            "y formato de fecha homologados. Sin eliminar filas."
+        ),
         None,
     ),
     "v1": (
@@ -48,9 +50,11 @@ VERSIONS = {
     ),
     "v2": (
         "demand_features_v2.parquet",
-        "Features: panel (hora_inicio x estacion_id) con features temporales, "
-        "de rezago (1h, 24h, 168h), media movil 7d, demanda del sistema y "
-        "atributos estaticos de estacion. Generado desde trips_v1 con features.py.",
+        (
+            "Features: panel (hora_inicio x estacion_id) con features temporales, "
+            "de rezago (1h, 24h, 168h), media movil 7d, demanda del sistema y "
+            "atributos estaticos de estacion. Generado desde trips_v1 con features.py."
+        ),
         None,
     ),
 }
@@ -156,7 +160,7 @@ class DatasetVersioner:
                 light, source=path.as_posix(), name=f"mibici_trips_{version}"
             )
             mlflow.log_input(ds, context=version)
-        except Exception as exc:  # el resto del registro sigue siendo valido
+        except Exception as exc:  # noqa: BLE001 - el resto del registro sigue siendo valido
             logger.warning(f"No se pudo registrar el input dataset: {exc}")
 
 

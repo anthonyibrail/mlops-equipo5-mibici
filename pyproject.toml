@@ -30,3 +30,7 @@ extend-select = ["I"]  # Add import sorting
 known-first-party = ["mibici"]
 force-sort-within-sections = true
 
+
+[tool.ruff.lint.flake8-bugbear]
+# typer.Option y typer.Argument son el patrón estándar de Typer en argumentos
+extend-immutable-calls = ["typer.Option", "typer.Argument"]
