@@ -11,13 +11,14 @@ Uso:
 
 from __future__ import annotations
 
+from loguru import logger
 import mlflow
 import numpy as np
 import pandas as pd
 import typer
-from loguru import logger
 
 from mibici.config import INTERIM_DATA_DIR
+from mibici.features import hourly_demand
 from mibici.versioning import TRACKING_URI
 
 app = typer.Typer()
@@ -25,14 +26,6 @@ app = typer.Typer()
 EXPERIMENT = "mibici-baseline-versiones"
 TEST_MONTHS = 3
 SEASON_H = 24 * 7
-
-
-def hourly_demand(df: pd.DataFrame) -> pd.DataFrame:
-    """Matriz hora x estacion con el numero de viajes que inician (0 si no hubo)."""
-    hours = df["inicio"].dt.floor("h")
-    counts = df.groupby([hours, "origen_id"]).size().unstack(fill_value=0)
-    full = pd.date_range(counts.index.min(), counts.index.max(), freq="h")
-    return counts.reindex(full, fill_value=0)
 
 
 def seasonal_naive_scores(demand: pd.DataFrame, test_start: pd.Timestamp) -> dict:
@@ -45,7 +38,7 @@ def seasonal_naive_scores(demand: pd.DataFrame, test_start: pd.Timestamp) -> dic
         "mae": mae,
         # MAE / demanda media: compara versiones con distinto nivel de demanda
         "mae_relativo": mae / float(y.to_numpy().mean()),
-        "rmse": float(np.sqrt(np.nanmean(err ** 2))),
+        "rmse": float(np.sqrt(np.nanmean(err**2))),
         "mae_horas_pico": float(np.nanmean(np.abs(err[peak]))),
         "demanda_media_hora_estacion": float(y.to_numpy().mean()),
     }
@@ -56,16 +49,27 @@ def main(versions: list[str] = typer.Option(["v0", "v1"])):
     mlflow.set_tracking_uri(TRACKING_URI)
     mlflow.set_experiment(EXPERIMENT)
     for v in versions:
-        df = pd.read_parquet(INTERIM_DATA_DIR / f"trips_{v}.parquet",
-                             columns=["inicio", "origen_id"]).dropna()
+        df = pd.read_parquet(
+            INTERIM_DATA_DIR / f"trips_{v}.parquet", columns=["inicio", "origen_id"]
+        ).dropna()
         demand = hourly_demand(df)
-        test_start = demand.index.max().normalize() - pd.DateOffset(months=TEST_MONTHS) + pd.Timedelta(days=1)
+        test_start = (
+            demand.index.max().normalize()
+            - pd.DateOffset(months=TEST_MONTHS)
+            + pd.Timedelta(days=1)
+        )
         scores = seasonal_naive_scores(demand, test_start)
         with mlflow.start_run(run_name=f"seasonal_naive_{v}"):
             mlflow.set_tags({"dataset_version": v, "model": "seasonal_naive"})
-            mlflow.log_params({"dataset_version": v, "season_hours": SEASON_H,
-                               "test_start": str(test_start.date()), "stations": demand.shape[1],
-                               "trips": len(df)})
+            mlflow.log_params(
+                {
+                    "dataset_version": v,
+                    "season_hours": SEASON_H,
+                    "test_start": str(test_start.date()),
+                    "stations": demand.shape[1],
+                    "trips": len(df),
+                }
+            )
             mlflow.log_metrics(scores)
         logger.info(f"{v}: {scores}")
 
