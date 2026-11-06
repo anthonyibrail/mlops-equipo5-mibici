@@ -1,0 +1,61 @@
+# Configuracion central del proyecto (Fase 2).
+# Ningun modulo debe fijar en el codigo los valores que aparecen aqui:
+# se leen con mibici.config.load_params().
+
+seed: 42
+
+datos:
+  viajes: data/interim/trips_v1.parquet
+  features: data/processed/demand_features_v3.parquet
+
+# --- Definicion del problema -------------------------------------------------
+# Decision que apoya el modelo: el plan nocturno de redistribucion de bicicletas.
+# A las 00:00 del dia D se pronostican las 24 horas de D para cada estacion.
+problema:
+  # Se pronostican salidas y llegadas por estacion y hora; con ambas se obtiene
+  # el balance neto (salidas - llegadas), que indica si una estacion se vacia o se llena.
+  objetivos: [salidas, llegadas]
+  hora_pronostico: 0
+  horizonte_horas: 24
+  # Al pronosticar a las 00:00 solo se conocen los datos de dias anteriores.
+  # Por eso ninguna feature puede usar un rezago menor a 24 h
+  # (por ejemplo, demanda_lag_1h no existe en el momento de la prediccion).
+  rezago_minimo_horas: 24
+  horas_pico: [7, 8, 9, 17, 18, 19]
+
+# --- Validacion con ventana movil (walk-forward) -----------------------------
+# Se entrena con los meses anteriores a un corte, se evalua en el mes siguiente,
+# se avanza el corte un mes y se repite. Se reporta el promedio de los cortes.
+validacion:
+  columna_tiempo: hora_inicio
+  primer_mes_prueba: "2026-04"
+  n_cortes: 6               # meses de prueba: 2026-04 ... 2026-09
+  meses_prueba: 1
+  meses_entrenamiento: 12   # ventana movil de 12 meses; null = ventana creciente
+
+# --- Lineas base ---------------------------------------------------------------
+# Todo modelo debe compararse contra ambas con el mismo esquema de validacion.
+lineas_base:
+  # Ingenuo estacional: misma estacion y hora de la semana anterior.
+  columna_estacional: "{objetivo}_lag_168h"
+  # Promedio historico del periodo de entrenamiento por estacion, dia y hora.
+  llaves_promedio: [estacion_id, dia_semana, hora]
+
+# --- Modelos -------------------------------------------------------------------
+# Propuesta inicial; el Data Scientist ajusta el espacio de busqueda.
+modelos:
+  hist_gbr:
+    fijos:
+      loss: poisson          # la demanda es un conteo no negativo
+      max_iter: 300
+    busqueda:
+      n_iter: 10
+      espacio:
+        learning_rate: [0.03, 0.05, 0.1]
+        max_leaf_nodes: [31, 63, 127]
+        min_samples_leaf: [20, 50, 100]
+        l2_regularization: [0.0, 0.1, 1.0]
+
+mlflow:
+  experimento_modelos: mibici-modelos
+  modelo_registrado: mibici-demanda

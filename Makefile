@@ -89,6 +89,11 @@ features:
 plots:
 	$(PYTHON_INTERPRETER) -m mibici.plots
 
+## Lineas base con validacion movil (params.yaml) y registro en MLflow
+.PHONY: lineas-base
+lineas-base:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.validation
+
 ## Pipeline completo: descarga, datos, features, baseline y plots
 .PHONY: pipeline
 pipeline: data features baseline plots
