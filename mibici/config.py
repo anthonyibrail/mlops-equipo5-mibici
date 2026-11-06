@@ -2,6 +2,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from loguru import logger
+import yaml
 
 # Load environment variables from .env file if it exists
 load_dotenv()
@@ -20,6 +21,18 @@ MODELS_DIR = PROJ_ROOT / "models"
 
 REPORTS_DIR = PROJ_ROOT / "reports"
 FIGURES_DIR = REPORTS_DIR / "figures"
+
+# Configuracion del proyecto (problema, validacion, modelos): ver params.yaml
+PARAMS_PATH = PROJ_ROOT / "params.yaml"
+
+
+def load_params(path: Path = PARAMS_PATH) -> dict:
+    """Lee params.yaml. Las rutas de la seccion 'datos' se devuelven absolutas."""
+    with open(path, encoding="utf-8") as f:
+        params = yaml.safe_load(f)
+    params["datos"] = {k: PROJ_ROOT / v for k, v in params.get("datos", {}).items()}
+    return params
+
 
 # If tqdm is installed, configure loguru with tqdm.write
 # https://github.com/Delgan/loguru/issues/135

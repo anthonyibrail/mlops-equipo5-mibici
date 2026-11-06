@@ -10,6 +10,7 @@ pip
 pyarrow==25.0.1
 pytest==9.1.1
 python-dotenv==1.2.4
+pyyaml==6.0.3
 requests==2.34.2
 ruff==0.17.2
 scikit-learn==1.9.1
