@@ -48,6 +48,10 @@ modelos:
     fijos:
       loss: poisson          # la demanda es un conteo no negativo
       max_iter: 300
+      learning_rate: 0.05    # tasa de aprendizaje conservadora para mayor estabilidad
+      max_leaf_nodes: 31     # limita la complejidad de cada arbol
+      min_samples_leaf: 100  # requiere al menos 100 muestras por hoja
+      l2_regularization: 1.0 # penalizacion L2 fuerte para evitar extrapolacion con Poisson
     busqueda:
       n_iter: 10
       espacio:
