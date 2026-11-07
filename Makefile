@@ -94,9 +94,29 @@ plots:
 lineas-base:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.validation
 
+## Panel v3: salidas y llegadas separadas, lags >= 24h (Fase 2)
+.PHONY: features-v3
+features-v3:
+	$(PYTHON_INTERPRETER) -m mibici.features build-v3
+	$(PYTHON_INTERPRETER) -m mibici.versioning v3 --parent v2 --date-col hora_inicio
+
+## Entrenamiento de pipelines por objetivo y registro en MLflow
+.PHONY: train
+train:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.train
+
+## Generacion de predicciones con los pipelines entrenados
+.PHONY: predict
+predict:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.predict
+
 ## Pipeline completo: descarga, datos, features, baseline y plots
 .PHONY: pipeline
 pipeline: data features baseline plots
+
+## Pipeline de entrenamiento (Fase 2): datos, features v3, lineas base, train, predict
+.PHONY: pipeline-train
+pipeline-train: data features-v3 lineas-base train predict
 
 
 #################################################################################
