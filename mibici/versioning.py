@@ -1,6 +1,6 @@
 """Versionado de datasets con MLflow.
 
-Cada version del dataset (v0 crudo unificado, v1 limpio, v2 features) se registra
+Cada version del dataset (v0 crudo, v1 limpio, v2 y v3 features) se registra
 como un run del experimento "mibici-datasets" con:
   - tags: version, version padre, etapa
   - params: filas, columnas, rango de fechas, hash SHA-256 del archivo, ruta
@@ -11,6 +11,7 @@ Uso:
     python -m mibici.versioning v0
     python -m mibici.versioning v1 --parent v0
     python -m mibici.versioning v2 --parent v1 --date-col hora_inicio
+    python -m mibici.versioning v3 --parent v1 --date-col hora_inicio
 """
 
 from __future__ import annotations
@@ -57,6 +58,15 @@ VERSIONS = {
             "Features: panel (hora_inicio x estacion_id) con features temporales, "
             "de rezago (1h, 24h, 168h), media movil 7d, demanda del sistema y "
             "atributos estaticos de estacion. Generado desde trips_v1 con features.py."
+        ),
+        None,
+    ),
+    "v3": (
+        "demand_features_v3.parquet",
+        (
+            "Panel de pronostico diario por estacion y hora, con objetivos "
+            "salidas/llegadas y rezagos de al menos 24h para evitar fuga de informacion. "
+            "Generado a partir de trips_v1 con features.build_v3."
         ),
         None,
     ),
