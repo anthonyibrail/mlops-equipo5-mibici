@@ -110,6 +110,11 @@ train:
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict
 
+## Ajuste de hiperparametros con RandomizedSearchCV (en progreso)
+.PHONY: tune
+tune:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.tune
+
 ## Pipeline completo: descarga, datos, features, baseline y plots
 .PHONY: pipeline
 pipeline: data features baseline plots
