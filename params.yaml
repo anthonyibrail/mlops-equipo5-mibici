@@ -60,6 +60,21 @@ modelos:
         min_samples_leaf: [20, 50, 100]
         l2_regularization: [0.0, 0.1, 1.0]
 
+  # Segundo algoritmo: Random Forest como referencia interpretable.
+  # Ventajas: resistente al sobreajuste, estable con datos ruidosos,
+  # no requiere tuning tan fino como el GBR.
+  # TODO Data Scientist: revisar espacio de busqueda y comparar contra hist_gbr.
+  random_forest:
+    fijos:
+      n_estimators: 200
+      n_jobs: -1
+    busqueda:
+      n_iter: 5
+      espacio:
+        max_depth: [10, 20, null]
+        min_samples_leaf: [20, 50, 100]
+        max_features: [0.5, 0.7, 1.0]
+
 mlflow:
   experimento_modelos: mibici-modelos
   modelo_registrado: mibici-demanda
