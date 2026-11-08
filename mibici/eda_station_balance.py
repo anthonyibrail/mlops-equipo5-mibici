@@ -21,10 +21,10 @@ from pathlib import Path
 import matplotlib
 
 matplotlib.use("Agg")
+from loguru import logger
 import matplotlib.pyplot as plt
 import pandas as pd
 import typer
-from loguru import logger
 
 from mibici.config import FIGURES_DIR, INTERIM_DATA_DIR, RAW_DATA_DIR, REPORTS_DIR
 
@@ -83,16 +83,18 @@ def peak_station_balance(
 
     starts = trips["inicio"]
     ends = trips["fin"]
-    start_mask = starts.dt.dayofweek.lt(5) & starts.dt.hour.isin(hours)
-    end_mask = ends.dt.dayofweek.lt(5) & ends.dt.hour.isin(hours)
+    start_mask = starts.dt.day_of_week.lt(5) & starts.dt.hour.isin(hours)
+    end_mask = ends.dt.day_of_week.lt(5) & ends.dt.hour.isin(hours)
 
     departures = trips.loc[start_mask, "origen_id"].dropna().value_counts()
     arrivals = trips.loc[end_mask, "destino_id"].dropna().value_counts()
     station_ids = departures.index.union(arrivals.index)
-    balances = pd.DataFrame({
-        "salidas": departures.reindex(station_ids, fill_value=0),
-        "llegadas": arrivals.reindex(station_ids, fill_value=0),
-    })
+    balances = pd.DataFrame(
+        {
+            "salidas": departures.reindex(station_ids, fill_value=0),
+            "llegadas": arrivals.reindex(station_ids, fill_value=0),
+        }
+    )
     balances.index.name = "estacion_id"
     balances = balances.astype(int).reset_index()
     balances["balance_neto"] = balances["salidas"] - balances["llegadas"]

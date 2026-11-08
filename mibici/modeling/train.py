@@ -20,7 +20,6 @@ Uso:
 from __future__ import annotations
 
 import pickle
-from pathlib import Path
 
 from loguru import logger
 import mlflow
@@ -63,7 +62,6 @@ BOOL_FEATURES = [
     "es_hora_pico_tarde",
 ]
 ALL_FEATURES = NUMERIC_FEATURES + BOOL_FEATURES
-
 
 
 def build_pipeline(model_cfg: dict) -> Pipeline:
@@ -112,9 +110,7 @@ def temporal_split(
     cutoff_ts = pd.Timestamp(cutoff + "-01")
     train = df[df[time_col] < cutoff_ts]
     test = df[df[time_col] >= cutoff_ts]
-    logger.info(
-        f"Corte {cutoff}: entrenamiento {len(train):,} filas | prueba {len(test):,} filas"
-    )
+    logger.info(f"Corte {cutoff}: entrenamiento {len(train):,} filas | prueba {len(test):,} filas")
     return train, test
 
 

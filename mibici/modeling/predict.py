@@ -1,34 +1,47 @@
-"""Inferencia de demanda horaria con los pipelines entrenados (Fase 2).
+"""Inferencia de demanda horaria con los modelos entrenados (Fase 2).
 
-Carga los pipelines guardados en models/ por train.py y genera predicciones
-de salidas y llegadas para el periodo de prueba (o cualquier panel v3).
+Por defecto carga desde el MLflow Model Registry la version con alias @champion de
+cada objetivo (mibici-demanda-salidas y mibici-demanda-llegadas), es decir, la que
+supero a la linea base (ver modeling/promote.py). Con --source local usa en su lugar
+los pipelines que train.py guarda en models/.
+
 El resultado incluye los valores reales y los pronosticados para facilitar
 la evaluacion y comparacion en MLflow.
 
 Uso:
     python -m mibici.modeling.predict
     python -m mibici.modeling.predict --cutoff 2026-04
+    python -m mibici.modeling.predict --source local
     python -m mibici.modeling.predict --output-path data/processed/predicciones.parquet
 """
 
 from __future__ import annotations
 
-import pickle
+from enum import Enum
 from pathlib import Path
+import pickle
 
 from loguru import logger
+import mlflow
+import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import typer
 
 from mibici.config import MODELS_DIR, PROCESSED_DATA_DIR, load_params
 from mibici.modeling.train import ALL_FEATURES
+from mibici.versioning import TRACKING_URI
 
 app = typer.Typer()
 
 
+class Source(str, Enum):
+    registry = "registry"
+    local = "local"
+
+
 def load_pipeline(target: str, models_dir: Path = MODELS_DIR):
-    """Carga el pipeline serializado para el objetivo indicado.
+    """Carga el pipeline serializado por train.py para el objetivo indicado.
 
     Args:
         target:     Nombre del objetivo ('salidas' o 'llegadas').
@@ -50,12 +63,36 @@ def load_pipeline(target: str, models_dir: Path = MODELS_DIR):
         return pickle.load(fh)
 
 
+def registry_uri(params: dict, target: str) -> str:
+    """URI del modelo de produccion en el Model Registry, por ejemplo
+    models:/mibici-demanda-salidas@champion."""
+    name = f"{params['mlflow']['modelo_registrado']}-{target}"
+    return f"models:/{name}@{params['promocion']['alias_produccion']}"
+
+
+def load_champion(params: dict, target: str):
+    """Carga desde el Model Registry la version @champion del objetivo indicado."""
+    uri = registry_uri(params, target)
+    mlflow.set_tracking_uri(TRACKING_URI)
+    mlflow.set_registry_uri(TRACKING_URI)
+    try:
+        return mlflow.sklearn.load_model(uri)
+    except mlflow.exceptions.MlflowException as exc:
+        raise RuntimeError(
+            f"No se pudo cargar {uri}. Ejecuta make register y make promote; "
+            "si el modelo no supero a la linea base, no tiene alias champion."
+        ) from exc
+
+
 @app.command()
 def main(
     output_path: Path = PROCESSED_DATA_DIR / "predicciones.parquet",
     cutoff: str = typer.Option(
         None,
         help="YYYY-MM: inicio del periodo de prueba. Default: params.yaml",
+    ),
+    source: Source = typer.Option(
+        Source.registry, help="registry: @champion del Model Registry; local: models/*.pkl"
     ),
 ) -> None:
     """Genera predicciones de salidas y llegadas y las guarda en un parquet."""
@@ -72,8 +109,12 @@ def main(
     logger.info(f"Periodo de prueba (desde {cutoff}): {len(test):,} filas")
 
     for target in targets:
-        logger.info(f"Cargando pipeline y generando predicciones para '{target}'...")
-        pipeline = load_pipeline(target)
+        if source is Source.registry:
+            logger.info(f"Cargando {registry_uri(params, target)}...")
+            pipeline = load_champion(params, target)
+        else:
+            logger.info(f"Cargando pipeline local de '{target}'...")
+            pipeline = load_pipeline(target)
         pred = np.clip(pipeline.predict(test[ALL_FEATURES]), 0.0, None)
         test[f"{target}_pred"] = pred
 

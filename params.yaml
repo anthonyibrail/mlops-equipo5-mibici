@@ -63,3 +63,13 @@ modelos:
 mlflow:
   experimento_modelos: mibici-modelos
   modelo_registrado: mibici-demanda
+
+# --- Promocion en el Model Registry -------------------------------------------
+# register.py registra cada modelo con el alias "candidate"; promote.py le asigna
+# "champion" solo si su MAE de los seis cortes es menor que el de la linea base en
+# TODOS los criterios. predict.py carga siempre la version "champion".
+promocion:
+  alias_candidato: candidate
+  alias_produccion: champion
+  linea_base_referencia: promedio_historico
+  criterios: [salidas, llegadas, balance]

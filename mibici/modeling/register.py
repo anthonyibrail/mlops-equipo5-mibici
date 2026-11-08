@@ -12,16 +12,15 @@ from __future__ import annotations
 
 import gc
 import json
-from pathlib import Path
 
+from loguru import logger
 import mlflow
+from mlflow.models import infer_signature
 import mlflow.sklearn
+from mlflow.tracking import MlflowClient
 import numpy as np
 import pandas as pd
 import typer
-from loguru import logger
-from mlflow.models import infer_signature
-from mlflow.tracking import MlflowClient
 
 from mibici.config import load_params
 from mibici.modeling.train import ALL_FEATURES, build_pipeline
@@ -52,7 +51,9 @@ def validate_preds(pred: np.ndarray, max_prediction: float = 1000.0) -> np.ndarr
     if np.any(pred < -1e-8):
         raise ValueError("Predicciones negativas para demanda Poisson")
     if float(pred.max()) > max_prediction:
-        raise ValueError(f"Prediccion extrema detectada (> {max_prediction:g} bicicletas/estacion/hora)")
+        raise ValueError(
+            f"Prediccion extrema detectada (> {max_prediction:g} bicicletas/estacion/hora)"
+        )
     return np.clip(pred, 0, None)
 
 
@@ -102,7 +103,9 @@ def main(
     if pd.Timestamp(training[time_col].max()) < end - pd.Timedelta(days=2):
         raise ValueError("El periodo mas reciente parece incompleto; verificar archivos")
 
-    logger.info(f"Refit final: {len(training):,} filas entre {start.date()} y {end.date()} (exclusivo)")
+    logger.info(
+        f"Refit final: {len(training):,} filas entre {start.date()} y {end.date()} (exclusivo)"
+    )
     mlflow.set_tracking_uri(TRACKING_URI)
     mlflow.set_registry_uri(TRACKING_URI)
     mlflow.set_experiment(params["mlflow"]["experimento_modelos"])
@@ -130,23 +133,31 @@ def main(
         registered_name = f"{base_name}-{target}"
 
         with mlflow.start_run(run_name=f"registro_final_{target}") as run:
-            mlflow.set_tags({
-                "tipo": "modelo_final_registrado",
-                "objetivo": target,
-                "dataset_version": "v3",
-                "estado": "candidate",
-                "advertencia_evaluacion": "Junio 2026 se consulto para corregir inestabilidad: holdout no totalmente independiente",
-            })
-            mlflow.log_params({
-                "target": target, "training_from": str(start.date()),
-                "training_until_exclusive": str(end.date()),
-                "rows_train": len(training), "seed": seed,
-                **{f"model_{k}": v for k, v in config.items()},
-            })
-            mlflow.log_metrics({
-                **scores[target],
-                "max_pred_inspeccion_entrenamiento": float(predictions.max()),
-            })
+            mlflow.set_tags(
+                {
+                    "tipo": "modelo_final_registrado",
+                    "objetivo": target,
+                    "dataset_version": "v3",
+                    "estado": "candidate",
+                    "advertencia_evaluacion": "Junio 2026 se consulto para corregir inestabilidad: holdout no totalmente independiente",
+                }
+            )
+            mlflow.log_params(
+                {
+                    "target": target,
+                    "training_from": str(start.date()),
+                    "training_until_exclusive": str(end.date()),
+                    "rows_train": len(training),
+                    "seed": seed,
+                    **{f"model_{k}": v for k, v in config.items()},
+                }
+            )
+            mlflow.log_metrics(
+                {
+                    **scores[target],
+                    "max_pred_inspeccion_entrenamiento": float(predictions.max()),
+                }
+            )
             mlflow.log_dict(chosen["winners"][target], f"seleccion_{target}.json")
             mlflow.sklearn.log_model(
                 sk_model=pipeline,
@@ -159,11 +170,14 @@ def main(
             current_run_id = run.info.run_id
 
         versions = [
-            v for v in client.search_model_versions(f"name = '{registered_name}'")
+            v
+            for v in client.search_model_versions(f"name = '{registered_name}'")
             if v.run_id == current_run_id
         ]
         if not versions:
-            raise RuntimeError(f"Modelo registrado, pero no se encontro version de {registered_name}; revisar MLflow")
+            raise RuntimeError(
+                f"Modelo registrado, pero no se encontro version de {registered_name}; revisar MLflow"
+            )
         version = max(versions, key=lambda v: int(v.version))
         client.set_registered_model_alias(registered_name, "candidate", version.version)
         client.set_model_version_tag(
