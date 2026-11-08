@@ -105,7 +105,27 @@ features-v3:
 train:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.train
 
-## Generacion de predicciones con los pipelines entrenados
+## Busqueda de hiperparametros (opcional: reescribe tuning_winners.json)
+.PHONY: tune
+tune:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.tune search
+
+## Evaluacion walk-forward de 6 cortes con los ganadores versionados
+.PHONY: evaluate
+evaluate:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.tune evaluate
+
+## Refit final y registro en el Model Registry con alias @candidate
+.PHONY: register
+register:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.register
+
+## Promocion a @champion si supera a la linea base (salidas, llegadas y balance)
+.PHONY: promote
+promote:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.promote
+
+## Predicciones con el modelo @champion del Model Registry
 .PHONY: predict
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict
@@ -116,7 +136,7 @@ pipeline: data features baseline plots
 
 ## Pipeline de entrenamiento (Fase 2): datos, features v3, lineas base, train, predict
 .PHONY: pipeline-train
-pipeline-train: data features-v3 lineas-base train predict
+pipeline-train: data features-v3 lineas-base train evaluate register promote predict
 
 
 #################################################################################
