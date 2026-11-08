@@ -1,0 +1,9 @@
+objetivo,candidato,mae_seleccion,estado,error,param_loss,param_max_iter,param_learning_rate,param_max_leaf_nodes,param_min_samples_leaf,param_l2_regularization
+salidas,0,0.598111043188912,valido,,poisson,300,0.05,31,100,1.0
+salidas,1,0.5984392728424597,valido,,poisson,300,0.03,63,20,0.1
+salidas,2,0.6013505744519123,valido,,poisson,300,0.03,31,20,0.0
+salidas,3,0.5981434031135533,valido,,poisson,300,0.1,63,50,0.0
+llegadas,0,0.5813263885335204,valido,,poisson,300,0.05,31,100,1.0
+llegadas,1,0.5817016058871529,valido,,poisson,300,0.03,63,20,0.1
+llegadas,2,0.5856656684048458,valido,,poisson,300,0.03,31,20,0.0
+llegadas,3,0.5809570450344007,valido,,poisson,300,0.1,63,50,0.0

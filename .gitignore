@@ -194,3 +194,7 @@ cython_debug/
 mlflow.db
 mlruns/
 mlartifacts/
+
+# Local environment and trained models
+.venv-uv/
+models/*.pkl
