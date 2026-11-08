@@ -12,7 +12,7 @@ Regla de no-filtracion (data leakage):
   - v3: todos los lags usan shift >= 24 para el horizonte de 24h.
 
 Uso:
-    python -m mibici.features            # genera panel v2 (legacy)
+    python -m mibici.features main       # genera panel v2 (legacy)
     python -m mibici.features build-v3   # genera panel v3 (Fase 2)
 """
 

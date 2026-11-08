@@ -81,7 +81,7 @@ baseline:
 ## Feature engineering: trips_v1 -> demand_features_v2 + registro MLflow v2
 .PHONY: features
 features:
-	$(PYTHON_INTERPRETER) -m mibici.features
+	$(PYTHON_INTERPRETER) -m mibici.features main
 	$(PYTHON_INTERPRETER) -m mibici.versioning v2 --parent v1 --date-col hora_inicio
 
 ## Generar plots de EDA y registrar en MLflow
@@ -98,7 +98,7 @@ lineas-base:
 .PHONY: features-v3
 features-v3:
 	$(PYTHON_INTERPRETER) -m mibici.features build-v3
-	$(PYTHON_INTERPRETER) -m mibici.versioning v3 --parent v2 --date-col hora_inicio
+	$(PYTHON_INTERPRETER) -m mibici.versioning v3 --parent v1 --date-col hora_inicio
 
 ## Entrenamiento de pipelines por objetivo y registro en MLflow
 .PHONY: train

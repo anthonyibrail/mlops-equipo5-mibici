@@ -185,8 +185,8 @@ def main(
                 {
                     "objetivo": target,
                     "cutoff_entrenamiento": cutoff,
-                    "loss": model_cfg.get("loss", "squared_error"),
-                    "max_iter": model_cfg.get("max_iter", 100),
+                    "seed": seed,
+                    **{f"model_{key}": value for key, value in model_cfg_with_seed.items()},
                     "n_features": len(ALL_FEATURES),
                     "filas_entrenamiento": len(train),
                     "filas_prueba": len(test),
