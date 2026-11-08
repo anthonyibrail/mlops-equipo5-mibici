@@ -1,0 +1,35 @@
+{
+  "seed": 42,
+  "metodologia": "primeros cortes temporales para tuning; muestra aleatoria reproducible por corte",
+  "tune_folds": 2,
+  "train_rows": 180000,
+  "test_rows": 60000,
+  "winners": {
+    "salidas": {
+      "mae_seleccion": 0.598111043188912,
+      "config": {
+        "loss": "poisson",
+        "max_iter": 300,
+        "learning_rate": 0.05,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 100,
+        "l2_regularization": 1.0
+      },
+      "candidato": 0
+    },
+    "llegadas": {
+      "candidato": 0,
+      "config": {
+        "loss": "poisson",
+        "max_iter": 300,
+        "learning_rate": 0.05,
+        "max_leaf_nodes": 31,
+        "min_samples_leaf": 100,
+        "l2_regularization": 1.0
+      },
+      "mae_seleccion": 0.5813263885335204,
+      "motivo": "Se descarta candidato optimizado por inestabilidad numerica con datos completos."
+    }
+  },
+  "nota_validacion": "La inestabilidad se detecto durante validacion temporal, incluyendo el corte de junio. Los resultados posteriores no constituyen un holdout completamente independiente."
+}
