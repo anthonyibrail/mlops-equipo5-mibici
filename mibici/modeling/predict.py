@@ -13,8 +13,8 @@ Uso:
 
 from __future__ import annotations
 
-import pickle
 from pathlib import Path
+import pickle
 
 from loguru import logger
 import numpy as np

@@ -14,12 +14,12 @@ from __future__ import annotations
 import gc
 import json
 
+from loguru import logger
 import mlflow
 import numpy as np
 import pandas as pd
-import typer
-from loguru import logger
 from sklearn.model_selection import ParameterSampler
+import typer
 
 from mibici.config import PROJ_ROOT, load_params
 from mibici.modeling.train import ALL_FEATURES, NUMERIC_FEATURES, build_pipeline
@@ -37,11 +37,13 @@ WINNERS_PATH = RESULTS_DIR / "tuning_winners.json"
 
 def load_feature_panel(params: dict) -> pd.DataFrame:
     """Lee únicamente columnas necesarias, optimizando RAM para Mac de 8 GB."""
-    cols = list(dict.fromkeys(
-        [params["validacion"]["columna_tiempo"]]
-        + ALL_FEATURES
-        + list(params["problema"]["objetivos"])
-    ))
+    cols = list(
+        dict.fromkeys(
+            [params["validacion"]["columna_tiempo"]]
+            + ALL_FEATURES
+            + list(params["problema"]["objetivos"])
+        )
+    )
     df = pd.read_parquet(params["datos"]["features"], columns=cols)
     for col in NUMERIC_FEATURES:
         df[col] = pd.to_numeric(df[col], errors="coerce").astype("float32")
@@ -60,7 +62,8 @@ def parameter_candidates(params: dict, n_iter: int) -> list[dict]:
     model = params["modelos"]["hist_gbr"]
     fixed = dict(model["fijos"])
     sampled = ParameterSampler(
-        model["busqueda"]["espacio"], n_iter=n_iter,
+        model["busqueda"]["espacio"],
+        n_iter=n_iter,
         random_state=params.get("seed", 42),
     )
     candidates = [fixed]
@@ -103,10 +106,16 @@ def sample_index(indices: np.ndarray, max_rows: int, rng: np.random.Generator) -
 
 @app.command()
 def search(
-    n_iter: int = typer.Option(3, min=1, help="Configuraciones aleatorias adicionales a la original"),
-    train_rows: int = typer.Option(180_000, min=1, help="Filas máximas de entrenamiento por corte"),
+    n_iter: int = typer.Option(
+        3, min=1, help="Configuraciones aleatorias adicionales a la original"
+    ),
+    train_rows: int = typer.Option(
+        180_000, min=1, help="Filas máximas de entrenamiento por corte"
+    ),
     test_rows: int = typer.Option(60_000, min=1, help="Filas máximas de prueba por corte"),
-    tune_folds: int = typer.Option(2, min=1, max=5, help="Primeros cortes usados para selección (el resto queda como holdout)"),
+    tune_folds: int = typer.Option(
+        2, min=1, max=5, help="Primeros cortes usados para selección (el resto queda como holdout)"
+    ),
 ) -> None:
     """Busca parámetros con muestra reproducible y sin tocar los modelos existentes."""
     params = load_params()
@@ -120,10 +129,12 @@ def search(
     for number, (tr, te) in enumerate(splitter.split(df)):
         if number >= tune_folds:
             break
-        sampled_folds.append((
-            sample_index(tr, train_rows, rng),
-            sample_index(te, test_rows, rng),
-        ))
+        sampled_folds.append(
+            (
+                sample_index(tr, train_rows, rng),
+                sample_index(te, test_rows, rng),
+            )
+        )
     candidates = parameter_candidates(params, n_iter)
     peak = params["problema"]["horas_pico"]
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -138,9 +149,7 @@ def search(
             error = None
             for fold_number, (tr, te) in enumerate(sampled_folds):
                 try:
-                    score = evaluate_sampled_fold(
-                        df, target, tr, te, config, peak, seed
-                    )
+                    score = evaluate_sampled_fold(df, target, tr, te, config, peak, seed)
                     fold_metrics.append(score)
                     logger.info(f"  corte {fold_number}: MAE={score['mae']:.4f}")
                 except (FloatingPointError, OverflowError, ValueError) as exc:
@@ -149,11 +158,14 @@ def search(
                     break
                 finally:
                     gc.collect()
-            mean_mae = float(np.mean([f["mae"] for f in fold_metrics])) if (
-                error is None and len(fold_metrics) == tune_folds
-            ) else float("inf")
+            mean_mae = (
+                float(np.mean([f["mae"] for f in fold_metrics]))
+                if (error is None and len(fold_metrics) == tune_folds)
+                else float("inf")
+            )
             row = {
-                "objetivo": target, "candidato": idx,
+                "objetivo": target,
+                "candidato": idx,
                 "mae_seleccion": mean_mae,
                 "estado": "valido" if np.isfinite(mean_mae) else "descartado",
                 "error": error or "",
@@ -161,15 +173,23 @@ def search(
             }
             results.append(row)
             with mlflow.start_run(run_name=f"tune_{target}_{idx}"):
-                mlflow.set_tags({
-                    "tipo": "tuning_muestreado", "objetivo": target,
-                    "dataset_version": "v3", "cortes_tuning": str(tune_folds),
-                })
-                mlflow.log_params({
-                    **{f"model_{k}": v for k, v in config.items()},
-                    "n_train_max": train_rows, "n_test_max": test_rows,
-                    "n_cortes_tuning": tune_folds, "semilla": seed,
-                })
+                mlflow.set_tags(
+                    {
+                        "tipo": "tuning_muestreado",
+                        "objetivo": target,
+                        "dataset_version": "v3",
+                        "cortes_tuning": str(tune_folds),
+                    }
+                )
+                mlflow.log_params(
+                    {
+                        **{f"model_{k}": v for k, v in config.items()},
+                        "n_train_max": train_rows,
+                        "n_test_max": test_rows,
+                        "n_cortes_tuning": tune_folds,
+                        "semilla": seed,
+                    }
+                )
                 if np.isfinite(mean_mae):
                     mlflow.log_metric("mae_seleccion", mean_mae)
                     for k, metric in enumerate(fold_metrics):
@@ -189,14 +209,20 @@ def search(
         logger.success(f"Mejor {target}: MAE muestral={best['mae_seleccion']:.4f}")
     report = pd.DataFrame(results)
     report.to_csv(RESULTS_DIR / "tuning_search.csv", index=False)
-    WINNERS_PATH.write_text(json.dumps({
-        "seed": seed,
-        "metodologia": "primeros cortes temporales para tuning; muestra aleatoria reproducible por corte",
-        "tune_folds": tune_folds,
-        "train_rows": train_rows,
-        "test_rows": test_rows,
-        "winners": winners,
-    }, indent=2), encoding="utf-8")
+    WINNERS_PATH.write_text(
+        json.dumps(
+            {
+                "seed": seed,
+                "metodologia": "primeros cortes temporales para tuning; muestra aleatoria reproducible por corte",
+                "tune_folds": tune_folds,
+                "train_rows": train_rows,
+                "test_rows": test_rows,
+                "winners": winners,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     logger.success(f"Resultados: {RESULTS_DIR / 'tuning_search.csv'}")
     logger.success(f"Ganadores: {WINNERS_PATH}")
 
@@ -223,20 +249,26 @@ def evaluate() -> None:
     mlflow.set_tracking_uri(TRACKING_URI)
     mlflow.set_experiment(params["mlflow"]["experimento_modelos"])
     with mlflow.start_run(run_name="hist_gbr_walk_forward_6_cortes"):
-        mlflow.set_tags({
-            "tipo": "evaluacion_walk_forward",
-            "dataset_version": "v3",
-            "advertencia": "Los primeros cortes se usaron para seleccionar hiperparametros; consultar holdout",
-        })
-        mlflow.log_params({
-            "n_cortes": splitter.n_splits,
-            "cortes_tuning": tuning_cut,
-            "meses_entrenamiento": splitter.train_months,
-            "semilla": seed,
-        })
+        mlflow.set_tags(
+            {
+                "tipo": "evaluacion_walk_forward",
+                "dataset_version": "v3",
+                "advertencia": "Los primeros cortes se usaron para seleccionar hiperparametros; consultar holdout",
+            }
+        )
+        mlflow.log_params(
+            {
+                "n_cortes": splitter.n_splits,
+                "cortes_tuning": tuning_cut,
+                "meses_entrenamiento": splitter.train_months,
+                "semilla": seed,
+            }
+        )
         for k, (tr, te) in enumerate(splitter.split(df)):
             pred_by_target = {}
-            logger.info(f"Validación {k + 1}/{splitter.n_splits}: {folds.loc[k, 'inicio_prueba']:%Y-%m}")
+            logger.info(
+                f"Validación {k + 1}/{splitter.n_splits}: {folds.loc[k, 'inicio_prueba']:%Y-%m}"
+            )
             test = df.iloc[te]
             for target in targets:
                 config = chosen["winners"][target]["config"]
@@ -250,36 +282,43 @@ def evaluate() -> None:
                 pred = np.clip(pred, 0.0, None)
                 pred_by_target[target] = pred
                 metric = regression_metrics(test[target], pred, test["hora"], peak)
-                rows.append({
-                    "corte": k,
-                    "mes_prueba": folds.loc[k, "inicio_prueba"].strftime("%Y-%m"),
-                    "objetivo": target,
-                    "tipo_corte": "seleccion" if k < tuning_cut else "holdout",
-                    "filas_entrenamiento": len(tr),
-                    "filas_prueba": len(te),
-                    **metric,
-                })
+                rows.append(
+                    {
+                        "corte": k,
+                        "mes_prueba": folds.loc[k, "inicio_prueba"].strftime("%Y-%m"),
+                        "objetivo": target,
+                        "tipo_corte": "seleccion" if k < tuning_cut else "holdout",
+                        "filas_entrenamiento": len(tr),
+                        "filas_prueba": len(te),
+                        **metric,
+                    }
+                )
                 mlflow.log_metric(f"{target}_mae_corte", metric["mae"], step=k)
                 logger.success(f"  {target}: MAE={metric['mae']:.4f}")
                 del pipeline
                 gc.collect()
             if {"salidas", "llegadas"}.issubset(pred_by_target):
                 balance = net_balance_metrics(
-                    test["salidas"], test["llegadas"],
-                    pred_by_target["salidas"], pred_by_target["llegadas"],
-                    test["hora"], peak,
+                    test["salidas"],
+                    test["llegadas"],
+                    pred_by_target["salidas"],
+                    pred_by_target["llegadas"],
+                    test["hora"],
+                    peak,
                 )
-                rows.append({
-                    "corte": k,
-                    "mes_prueba": folds.loc[k, "inicio_prueba"].strftime("%Y-%m"),
-                    "objetivo": "balance",
-                    "tipo_corte": "seleccion" if k < tuning_cut else "holdout",
-                    "filas_entrenamiento": len(tr),
-                    "filas_prueba": len(te),
-                    "mae": balance["balance_mae"],
-                    "rmse": balance["balance_rmse"],
-                    "mae_pico": balance["balance_mae_pico"],
-                })
+                rows.append(
+                    {
+                        "corte": k,
+                        "mes_prueba": folds.loc[k, "inicio_prueba"].strftime("%Y-%m"),
+                        "objetivo": "balance",
+                        "tipo_corte": "seleccion" if k < tuning_cut else "holdout",
+                        "filas_entrenamiento": len(tr),
+                        "filas_prueba": len(te),
+                        "mae": balance["balance_mae"],
+                        "rmse": balance["balance_rmse"],
+                        "mae_pico": balance["balance_mae_pico"],
+                    }
+                )
                 mlflow.log_metric("balance_mae_corte", balance["balance_mae"], step=k)
                 logger.success(f"  balance: MAE={balance['balance_mae']:.4f}")
             del test, pred_by_target
@@ -289,7 +328,9 @@ def evaluate() -> None:
         path = RESULTS_DIR / "walk_forward_6_cortes.csv"
         report.to_csv(path, index=False)
         mlflow.log_artifact(str(path))
-        for target in list(targets) + (["balance"] if "balance" in report["objetivo"].values else []):
+        for target in list(targets) + (
+            ["balance"] if "balance" in report["objetivo"].values else []
+        ):
             relevant = report[report["objetivo"] == target]
             for suffix, subset in (
                 ("seis_cortes", relevant),

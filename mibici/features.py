@@ -38,6 +38,7 @@ ROLLING_WINDOW_H = 7 * 24  # 168 horas = 7 dias
 # Funciones base de agregacion
 # ---------------------------------------------------------------------------
 
+
 def hourly_demand(df: pd.DataFrame) -> pd.DataFrame:
     """Matriz (hora x estacion) con conteo de viajes que INICIAN.
 
@@ -80,6 +81,7 @@ def hourly_arrivals(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # Panel v2 (legacy) - se mantiene sin cambios para compatibilidad con tests
 # ---------------------------------------------------------------------------
+
 
 def build_features(demand: pd.DataFrame, stations: pd.DataFrame) -> pd.DataFrame:
     """Construye el panel v2 a partir de la matriz de demanda horaria.
@@ -129,6 +131,7 @@ def build_features(demand: pd.DataFrame, stations: pd.DataFrame) -> pd.DataFrame
 # ---------------------------------------------------------------------------
 # Panel v3 (Fase 2) - salidas y llegadas, lags >= 24h
 # ---------------------------------------------------------------------------
+
 
 def build_features_v3(
     salidas: pd.DataFrame,
@@ -206,6 +209,7 @@ def build_features_v3(
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 @app.command()
 def main(
