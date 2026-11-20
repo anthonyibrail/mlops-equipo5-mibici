@@ -73,3 +73,46 @@ promocion:
   alias_produccion: champion
   linea_base_referencia: promedio_historico
   criterios: [salidas, llegadas, balance]
+
+# --- Monitoreo de data drift (Entrega final) -----------------------------------
+# drift.py toma como referencia el primer mes posterior al entrenamiento
+# (validacion.primer_mes_prueba), genera escenarios sinteticos a partir de ella y
+# compara datos y desempeno contra esa referencia. Ver mibici/modeling/drift.py.
+drift:
+  experimento: mibici-monitoreo
+  # Columnas de entrada vigiladas con PSI (no requieren conocer la demanda real)
+  # Las de calendario (hora, dia, mes) no se vigilan: cambian cada mes por diseño.
+  columnas_monitoreo:
+    [salidas_lag_24h, salidas_lag_48h, salidas_lag_168h, llegadas_lag_24h,
+     llegadas_lag_168h, media_7d, salidas_sistema_lag_24h]
+  bins_psi: 10
+  umbrales:
+    psi_aviso: 0.10          # PSI: < 0.10 estable, 0.10-0.25 cambio moderado
+    psi_alerta: 0.25         # > 0.25 cambio significativo
+    faltantes_alerta: 0.05   # aumento en la fraccion de nulos de una columna
+    sesgo_aviso: 0.10        # cambio en el sesgo (pronostico total / demanda total - 1)
+    sesgo_alerta: 0.20
+    mae_aviso: 1.10          # MAE del escenario / MAE de referencia
+    mae_alerta: 1.25
+    margen_linea_base: 0.02  # alerta si el MAE supera al de la linea base en mas de 2 %
+  # Escenarios sinteticos (tipos: demanda, features, faltantes, estacional)
+  escenarios:
+    sin_drift:               # control: debe quedar en OK (sin falsas alarmas)
+      tipo: demanda
+      factor: 1.0
+    aumento_demanda:         # la demanda real sube 30 % y las features aun no lo reflejan
+      tipo: demanda
+      factor: 1.3
+    error_pipeline_conteos:  # un error en el pipeline duplica los conteos historicos
+      tipo: features
+      columnas: [salidas_lag_24h, salidas_lag_48h, salidas_lag_168h,
+                 llegadas_lag_24h, llegadas_lag_168h, media_7d]
+      factor: 2.0
+    feature_faltante:        # se pierde la mitad de dos features agregadas
+      tipo: faltantes
+      columnas: [media_7d, salidas_sistema_lag_24h]
+      fraccion: 0.5
+    temporada_vacaciones:    # diciembre: la demanda baja 40 % respecto de abril
+      tipo: estacional
+      factor: 0.6
+      mes: 12
