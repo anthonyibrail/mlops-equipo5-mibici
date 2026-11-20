@@ -11,6 +11,18 @@ Prediccion de demanda horaria por estacion del sistema MiBici (Guadalajara) apli
 Datos: [MiBici, datos abiertos](https://mibici.net/en/open-data/) (enero 2024 a septiembre 2026, ~12.5 M viajes).
 Análisis de requerimientos: [`docs/ml_canvas.md`](docs/ml_canvas.md).
 
+## Índice
+
+1. [Requisitos e instalación](#requisitos-e-instalación)
+2. [Pruebas](#pruebas)
+3. [Cómo reproducir (Fase 1)](#cómo-reproducir-fase-1)
+4. [Cómo reproducir (Fase 2)](#cómo-reproducir-fase-2)
+5. [Servicio del modelo (FastAPI)](#servicio-del-modelo-fastapi)
+6. [Contenedor Docker](#contenedor-docker)
+7. [Reproducibilidad en otro entorno](#reproducibilidad-en-otro-entorno)
+8. [Monitoreo de data drift](#monitoreo-de-data-drift)
+9. [Organización del proyecto](#organización-del-proyecto)
+
 ## Requisitos e instalación
 
 - **Python 3.11.** El paquete exige esta versión (`requires-python = "~=3.11.0"`); con 3.12 o superior la instalación falla.
@@ -37,13 +49,29 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-**Verificar la instalación**
+**Verificar la instalación:** ejecutar las pruebas, como se explica en [Pruebas](#pruebas).
+
+## Pruebas
+
+Todas las pruebas se ejecutan con un solo comando desde la raíz del repositorio:
 
 ```bash
-make test        # o bien: python -m pytest tests
+pytest -q          # o bien: make test
 ```
 
-Las pruebas usan datos sintéticos, por lo que no requieren descargar el dataset.
+Usan datos sintéticos, así que no requieren descargar el dataset ni tener MLflow corriendo.
+
+| Archivo | Qué valida |
+|---|---|
+| `test_data.py` | Reglas de limpieza (v1) |
+| `test_features.py` | Panel v2, rezagos y ausencia de fuga de información |
+| `test_phase2_pipeline.py` | Panel v3 y Pipeline de entrenamiento con datos sintéticos |
+| `test_validation.py` | Validación walk-forward, líneas base y métricas |
+| `test_tune.py`, `test_register.py`, `test_promote.py` | Búsqueda de hiperparámetros, registro y promoción a `@champion` |
+| `test_drift.py` | Escenarios de drift, PSI y reglas de alerta |
+| `test_plots.py`, `test_eda_station_balance.py` | Gráficas y análisis exploratorio |
+
+_Pendiente: prueba de integración de punta a punta (carga de datos → preprocesamiento → predicción → métricas)._
 
 ## Cómo reproducir (Fase 1)
 
@@ -88,6 +116,61 @@ El entrenamiento actual usa un único corte para las métricas de `train.py`; **
 la comparación *walk-forward* de seis cortes, que debe evaluarse de forma separada
 antes de proclamar un modelo ganador.
 
+## Servicio del modelo (FastAPI)
+
+_Pendiente: endpoint `POST /predict`, esquema de entrada y salida (Swagger en `/docs`) y
+ruta del artefacto del modelo (`models:/mibici-demanda-salidas@champion` y
+`models:/mibici-demanda-llegadas@champion`, con su número de versión)._
+
+## Contenedor Docker
+
+_Pendiente: `docker build -t ml-service:latest .`, `docker run -p 8000:8000 ml-service:latest`
+y liga a la imagen publicada en DockerHub con sus tags versionados._
+
+## Reproducibilidad en otro entorno
+
+_Pendiente: ejecución del pipeline y del servicio en un entorno limpio y comparación de
+métricas y salidas contra las de referencia._
+
+## Monitoreo de data drift
+
+`mibici/modeling/drift.py` simula cambios en los datos después del despliegue y comprueba
+que el monitoreo los detecte. Toda la configuración (escenarios y umbrales) está en la
+sección `drift` de `params.yaml`.
+
+```bash
+make drift                                       # modelo @champion del Model Registry
+python -m mibici.modeling.drift --source local   # pipelines de models/*.pkl
+```
+
+**Referencia.** El primer mes posterior al entrenamiento (`validacion.primer_mes_prueba`),
+sin alteraciones. Cada escenario se genera a partir de ella con una semilla fija:
+
+| Escenario | Qué simula |
+|---|---|
+| `sin_drift` | Control: los mismos datos; no debe generar alertas |
+| `aumento_demanda` | La demanda real sube 30 % y las features aún no lo reflejan |
+| `error_pipeline_conteos` | Un error en el pipeline duplica los conteos de los rezagos |
+| `feature_faltante` | Se pierde la mitad de `media_7d` y `salidas_sistema_lag_24h` |
+| `temporada_vacaciones` | Diciembre: la demanda baja 40 % |
+
+**Detección en dos niveles.**
+
+- **Datos de entrada** (no requieren conocer la demanda real): PSI por columna
+  (aviso ≥ 0.10, alerta ≥ 0.25) y aumento de valores nulos (alerta ≥ 5 %).
+  Las columnas de calendario no se vigilan, porque cambian cada mes por diseño.
+- **Desempeño** (cuando llega la demanda real, un día después): cambio en el sesgo
+  (aviso ≥ 10 %, alerta ≥ 20 %), cambio en el MAE (aviso ≥ 10 %, alerta ≥ 25 %) y
+  comparación contra la línea base de promedio histórico.
+
+Cada escenario recibe un estado (`OK`, `AVISO` o `ALERTA`), los motivos y una acción
+propuesta: revisar el pipeline de features, reentrenar con datos recientes o usar la
+línea base mientras se reentrena.
+
+**Salidas.** `reports/drift/resumen_drift.csv`, `reports/drift/psi_por_columna.csv`,
+las gráficas `reports/figures/drift_psi.png`, `drift_sesgo.png` y `drift_mae.png`,
+y un run por escenario en el experimento `mibici-monitoreo` de MLflow.
+
 ## Organización del proyecto
 
 ```
@@ -98,38 +181,43 @@ antes de proclamar un modelo ganador.
 ├── data                 <- No se versiona en Git; se regenera con el pipeline
 │   ├── external         <- Datos de terceros (reservado para festivos y clima)
 │   ├── interim          <- v0 y v1 del dataset (trips_v0.parquet, trips_v1.parquet)
-│   ├── processed        <- v2, panel de modelado (demand_features_v2.parquet)
+│   ├── processed        <- v2 y v3, paneles de modelado (demand_features_v2/v3.parquet)
 │   └── raw              <- CSV mensuales y catálogo de estaciones, inmutables
 │
 ├── docs                 <- ML Canvas del proyecto
 ├── models               <- Modelos entrenados (Fase 2)
 ├── notebooks            <- Notebooks; convención: número, iniciales y descripción
 │                           (por ejemplo, 1.0-ep-uso-del-pipeline)
+├── params.yaml          <- Configuración central: problema, validación, modelos, MLflow y drift
 ├── pyproject.toml       <- Metadatos del paquete y configuración de ruff
 ├── references           <- Diccionarios de datos y material de consulta
 ├── reports
 │   ├── cleaning_report_v1.json  <- Filas afectadas y justificación de cada regla de limpieza
-│   └── figures          <- Gráficas del EDA (generadas con make plots)
+│   ├── model_selection  <- Resultados de la búsqueda y de la evaluación walk-forward
+│   ├── drift            <- Resumen de la simulación de drift (make drift)
+│   └── figures          <- Gráficas del EDA y del monitoreo de drift
 ├── requirements.txt     <- Dependencias con versiones fijadas
 │
-├── tests
-│   ├── test_data.py     <- Reglas de limpieza
-│   ├── test_features.py <- Panel v2, rezagos y ausencia de fuga de información
-│   └── test_plots.py    <- Generación de gráficas y correlaciones
+├── tests                <- Pruebas con pytest (ver la sección Pruebas)
 │
 └── mibici               <- Código fuente del pipeline
     ├── __init__.py
     ├── config.py        <- Rutas del proyecto, centralizadas
     ├── dataset.py       <- MiBiciDownloader y MiBiciLoader: descarga y unificación (v0)
     ├── cleaning.py      <- TripCleaner y Rule: reglas de limpieza (v1)
-    ├── features.py      <- Panel estación × hora con variables temporales y rezagos (v2)
+    ├── features.py      <- Panel estación × hora con variables temporales y rezagos (v2 y v3)
     ├── versioning.py    <- DatasetVersioner: registro de versiones en MLflow
     ├── plots.py         <- Gráficas del EDA, registradas en MLflow
     └── modeling
         ├── __init__.py
-        ├── baseline.py  <- Baseline ingenuo estacional sobre las versiones
-        ├── predict.py   <- Inferencia (Fase 2)
-        └── train.py     <- Entrenamiento (Fase 2)
+        ├── baseline.py   <- Baseline ingenuo estacional sobre las versiones (Fase 1)
+        ├── validation.py <- Validación walk-forward, líneas base y métricas
+        ├── train.py      <- Pipeline de scikit-learn y entrenamiento
+        ├── tune.py       <- Búsqueda de hiperparámetros y evaluación de 6 cortes
+        ├── register.py   <- Registro en el Model Registry (@candidate)
+        ├── promote.py    <- Promoción a @champion si supera a la línea base
+        ├── predict.py    <- Inferencia con el modelo @champion
+        └── drift.py      <- Simulación de data drift y alertas
 ```
 
 --------

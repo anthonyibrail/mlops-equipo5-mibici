@@ -130,14 +130,18 @@ promote:
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict
 
+## Simulacion de data drift y alertas con el modelo @champion
+.PHONY: drift
+drift:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.drift
+
 ## Pipeline completo: descarga, datos, features, baseline y plots
 .PHONY: pipeline
 pipeline: data features baseline plots
 
 ## Pipeline de entrenamiento (Fase 2): datos, features v3, lineas base, train, predict
 .PHONY: pipeline-train
-pipeline-train: data features-v3 lineas-base train evaluate register promote predict
-
+pipeline-train: data features-v3 lineas-base train evaluate register promote predict drift
 
 #################################################################################
 # Self Documenting Commands                                                     #
