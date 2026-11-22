@@ -1,0 +1,16 @@
+{
+  "url": "http://localhost:8000",
+  "imagen": "efrainpb/ml-service:1.0.1",
+  "mes": "2026-04",
+  "filas_fuera_del_esquema": 0,
+  "filas": 1000,
+  "salidas_dif_max": 0.0,
+  "salidas_filas_identicas": 1000,
+  "salidas_mae_local": 0.5336732756447016,
+  "salidas_mae_servicio": 0.5336732756447016,
+  "llegadas_dif_max": 0.0,
+  "llegadas_filas_identicas": 1000,
+  "llegadas_mae_local": 0.5774315895264036,
+  "llegadas_mae_servicio": 0.5774315895264036,
+  "reproducible": true
+}
