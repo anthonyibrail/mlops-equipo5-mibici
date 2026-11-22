@@ -15,7 +15,6 @@ Para ver el Swagger interactivo:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
