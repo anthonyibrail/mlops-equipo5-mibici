@@ -16,10 +16,7 @@ obligatorios.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from pydantic import BaseModel, Field
-
 
 # ---------------------------------------------------------------------------
 # Request
@@ -74,43 +71,43 @@ class PredictionRequest(BaseModel):
     )
 
     # --- Features de rezago (Optional: None -> NaN, manejado por HistGBR) ---
-    salidas_lag_24h: Optional[float] = Field(
+    salidas_lag_24h: float | None = Field(
         None,
         ge=0,
         description="Salidas en la misma hora del dia anterior. None si no hay historia.",
         examples=[3.0],
     )
-    salidas_lag_48h: Optional[float] = Field(
+    salidas_lag_48h: float | None = Field(
         None,
         ge=0,
         description="Salidas en la misma hora de hace 48 h.",
         examples=[2.5],
     )
-    salidas_lag_168h: Optional[float] = Field(
+    salidas_lag_168h: float | None = Field(
         None,
         ge=0,
         description="Salidas en la misma hora de la semana anterior (168 h).",
         examples=[4.0],
     )
-    llegadas_lag_24h: Optional[float] = Field(
+    llegadas_lag_24h: float | None = Field(
         None,
         ge=0,
         description="Llegadas en la misma hora del dia anterior.",
         examples=[2.0],
     )
-    llegadas_lag_168h: Optional[float] = Field(
+    llegadas_lag_168h: float | None = Field(
         None,
         ge=0,
         description="Llegadas en la misma hora de la semana anterior.",
         examples=[3.5],
     )
-    media_7d: Optional[float] = Field(
+    media_7d: float | None = Field(
         None,
         ge=0,
         description="Media de salidas en la misma hora de los 7 dias previos.",
         examples=[3.2],
     )
-    salidas_sistema_lag_24h: Optional[float] = Field(
+    salidas_sistema_lag_24h: float | None = Field(
         None,
         ge=0,
         description="Total de salidas del sistema completo en la misma hora del dia anterior.",

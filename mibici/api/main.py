@@ -16,9 +16,9 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI, HTTPException, Request
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request
 
 from mibici.api import loader as _loader
 from mibici.api.schemas import (

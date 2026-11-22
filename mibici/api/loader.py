@@ -18,7 +18,6 @@ from sklearn.pipeline import Pipeline
 from mibici.config import MODELS_DIR
 from mibici.modeling import bool_to_int  # noqa: F401 -- necesario para pickle
 
-
 _pipelines: dict[str, Pipeline] | None = None
 
 
