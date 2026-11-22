@@ -153,10 +153,7 @@ def metrics() -> MetricsResponse:
     if not REPORT_PATH.exists():
         raise HTTPException(
             status_code=503,
-            detail=(
-                "Metricas no disponibles. "
-                "Ejecuta 'dvc repro train' o 'make evaluate' primero."
-            ),
+            detail="Metricas no disponibles. Ejecuta 'dvc repro train' o 'make evaluate' primero.",
         )
 
     df = pd.read_csv(REPORT_PATH)
