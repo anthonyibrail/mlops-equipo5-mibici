@@ -130,6 +130,24 @@ promote:
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict
 
+## Exportar los modelos @champion del Registry a models/champion/ (para Docker)
+.PHONY: export-model
+export-model:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.export
+
+IMAGE ?= ml-service
+TAG ?= latest
+
+## Construir la imagen Docker del servicio (antes: make export-model)
+.PHONY: docker-build
+docker-build:
+	docker build -t $(IMAGE):$(TAG) .
+
+## Correr el servicio en Docker en http://localhost:8000
+.PHONY: docker-run
+docker-run:
+	docker run --rm -p 8000:8000 $(IMAGE):$(TAG)
+
 ## Arrancar el servicio FastAPI (Entrega Final)
 .PHONY: api
 api:

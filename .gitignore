@@ -205,3 +205,4 @@ mlartifacts/
 # Local environment and trained models
 .venv-uv/
 models/*.pkl
+models/champion/*.pkl

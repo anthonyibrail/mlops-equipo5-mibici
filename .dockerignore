@@ -1,0 +1,24 @@
+# Solo entra a la imagen lo que copia el Dockerfile; el resto se excluye para que
+# el contexto de construccion sea pequeno y no se filtren datos ni credenciales.
+.git
+.github
+.venv
+venv
+.dvc
+data/
+mlruns/
+mlflow.db
+notebooks/
+docs/
+tests/
+reports/figures/
+reports/drift/
+models/*.pkl
+**/__pycache__
+.pytest_cache
+.ruff_cache
+*.json.key
+key.json
+*-credentials.json
+*-service-account.json
+service_account*.json
