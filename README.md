@@ -189,13 +189,73 @@ ruta del artefacto del modelo (`models:/mibici-demanda-salidas@champion` y
 
 ## Contenedor Docker
 
-_Pendiente: `docker build -t ml-service:latest .`, `docker run -p 8000:8000 ml-service:latest`
-y liga a la imagen publicada en DockerHub con sus tags versionados._
+Imagen publicada en DockerHub: [efrainpb/ml-service](https://hub.docker.com/r/efrainpb/ml-service)
+
+| Tag | Contenido |
+|---|---|
+| `1.0.1`, `latest` | Servicio FastAPI con los modelos @champion y `OMP_NUM_THREADS=1` (versión recomendada) |
+| `1.0.0` | Primera versión; tarda ~3.8 s por predicción por la coordinación de hilos de OpenMP |
+
+Modelos empaquetados en la imagen (detalle en `models/champion/model_info.json`):
+
+- Salidas: `models:/mibici-demanda-salidas/1` (alias `@champion`)
+- Llegadas: `models:/mibici-demanda-llegadas/1` (alias `@champion`)
+
+**Usar la imagen publicada:**
+
+```bash
+docker run -p 8000:8000 efrainpb/ml-service:1.0.1
+# Swagger: http://localhost:8000/docs
+```
+
+**Construir la imagen desde el repositorio** (requiere los modelos @champion en el MLflow local,
+es decir, haber corrido `make pipeline-train`):
+
+```bash
+make export-model                          # models:/...@champion -> models/champion/
+docker build -t ml-service:latest .        # o bien: make docker-build
+docker run -p 8000:8000 ml-service:latest  # o bien: make docker-run
+```
+
+Decisiones de la imagen:
+
+- **Modelos exportados, no la base de MLflow:** el Model Registry guarda rutas absolutas de la
+  máquina de entrenamiento, así que `make export-model` (`mibici/modeling/export.py`) guarda cada
+  modelo @champion como archivo y registra su versión en `model_info.json`.
+- **Dependencias mínimas:** `requirements-serve.txt` con las mismas versiones fijas del proyecto,
+  sin Jupyter, DVC ni herramientas de prueba.
+- **`OMP_NUM_THREADS=1`:** scikit-learn usa por defecto todos los núcleos para cada predicción;
+  para una sola fila, coordinar los hilos costaba ~3.8 s por petición. Con un hilo, ~0.012 s.
+- **Seguridad:** el servicio corre con un usuario sin privilegios y la imagen incluye un chequeo
+  de salud sobre `/health`.
 
 ## Reproducibilidad en otro entorno
 
-_Pendiente: ejecución del pipeline y del servicio en un entorno limpio y comparación de
-métricas y salidas contra las de referencia._
+Base: Python 3.11, dependencias con versiones fijas (`requirements.txt` y `requirements-serve.txt`),
+semilla 42 en `params.yaml` y versiones de datos y modelos registradas en MLflow.
+
+**Prueba del modelo desplegado.** La imagen `1.0.1` se descargó de DockerHub, sin imágenes
+locales, y sus predicciones se compararon contra el modelo @champion cargado del Model Registry
+fuera del contenedor, con 1,000 filas reales de abril de 2026 elegidas con la semilla fija:
+
+```bash
+docker run -d -p 8000:8000 efrainpb/ml-service:1.0.1
+make check-service IMAGE=efrainpb/ml-service TAG=1.0.1
+```
+
+| Objetivo | Filas idénticas | Diferencia máxima | MAE fuera del contenedor | MAE en el contenedor |
+|---|---|---|---|---|
+| Salidas | 1,000 / 1,000 | 0 | 0.5337 | 0.5337 |
+| Llegadas | 1,000 / 1,000 | 0 | 0.5774 | 0.5774 |
+
+El detalle queda en `reports/reproducibilidad/` y en el run `reproducibilidad_servicio` del
+experimento `mibici-modelos`. El MAE de esta muestra no mide el desempeño del modelo, porque el
+@champion se reentrenó con datos que incluyen abril; las métricas de desempeño son las de la
+validación walk-forward.
+
+**Antecedentes.** En las fases 1 y 2, el pipeline de datos y la validación walk-forward se
+ejecutaron desde cero en una segunda computadora: las versiones v0 y v1 tuvieron las mismas
+filas que el original y el reporte `walk_forward_6_cortes.csv` resultó idéntico byte por byte.
 
 ## Monitoreo de data drift
 
