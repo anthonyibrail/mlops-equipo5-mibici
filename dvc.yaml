@@ -54,20 +54,26 @@ stages:
       - data/processed/demand_features_v3.parquet
 
   # -------------------------------------------------------------------------
-  # Etapa 3: evaluacion walk-forward y entrenamiento final del modelo
-  # Lee los hiperparametros ganadores de reports/model_selection/tuning_winners.json
-  # (ese archivo fue ajustado manualmente; no lo sobreescribe esta etapa).
-  # Output: models/pipeline_salidas.pkl, models/pipeline_llegadas.pkl
-  #         reports/model_selection/walk_forward_6_cortes.csv  (metrica DVC)
+  # Etapa 3: lineas base + evaluacion walk-forward + registro del modelo
+  #
+  # Orden interno obligatorio:
+  #   1. validation  -- registra lineas base en MLflow (promote.py las necesita)
+  #   2. tune evaluate -- walk-forward de 6 cortes, genera los pkl
+  #   3. register    -- registra los pkl en el Model Registry con @candidate
+  #   4. promote     -- asigna @champion si supera a la linea base en 3 criterios
+  #
+  # Lee los hiperparametros de reports/model_selection/tuning_winners.json
+  # (ese archivo fue ajustado manualmente y no se sobreescribe en este stage).
   # -------------------------------------------------------------------------
   train:
     cmd: >-
+      python -m mibici.modeling.validation &&
       python -m mibici.modeling.tune evaluate &&
       python -m mibici.modeling.register &&
       python -m mibici.modeling.promote
     deps:
-      - mibici/modeling/tune.py
       - mibici/modeling/validation.py
+      - mibici/modeling/tune.py
       - mibici/modeling/register.py
       - mibici/modeling/promote.py
       - mibici/modeling/__init__.py

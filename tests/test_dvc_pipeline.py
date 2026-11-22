@@ -144,7 +144,29 @@ def test_params_yaml_referenced_as_dep():
     )
 
 
-def test_tuning_winners_is_dep_of_train():
+def test_train_cmd_includes_validation_before_promote():
+    """El comando de 'train' debe ejecutar validation antes de promote.
+
+    promote.py busca runs de la linea base 'promedio_historico' en MLflow;
+    si validation no corrio primero, promote falla con ValueError.
+    """
+    content = _load_dvc_yaml()
+    cmd = content["stages"]["train"]["cmd"]
+    assert "mibici.modeling.validation" in cmd, (
+        "El stage 'train' debe ejecutar 'python -m mibici.modeling.validation' "
+        "ANTES de promote. Sin esto, promote.py no encuentra la linea base "
+        "en MLflow y lanza ValueError."
+    )
+    assert "mibici.modeling.promote" in cmd, (
+        "El stage 'train' debe incluir 'python -m mibici.modeling.promote'."
+    )
+    # Verifica que validation aparece antes que promote en el comando
+    idx_validation = cmd.find("mibici.modeling.validation")
+    idx_promote = cmd.find("mibici.modeling.promote")
+    assert idx_validation < idx_promote, (
+        "En el stage 'train', 'validation' debe aparecer ANTES que 'promote' "
+        "en el campo 'cmd'."
+    )
     """tuning_winners.json debe ser dep de 'train' para evitar re-busqueda."""
     content = _load_dvc_yaml()
     train_deps = content["stages"]["train"].get("deps", [])
