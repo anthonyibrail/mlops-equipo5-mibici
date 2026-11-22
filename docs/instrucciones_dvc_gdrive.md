@@ -241,16 +241,74 @@ ni de permisos.
 
 ## Resolucion de problemas comunes
 
+### El navegador rechaza la conexion al autenticar con Google Drive
+
+Este es el problema mas frecuente con OAuth en DVC. Lo que ocurre es:
+
+1. `dvc push` arranca un servidor local en `localhost:8080`
+2. Abre el navegador a la pagina de consent de Google
+3. Al aprobar los permisos, Google redirige a `localhost:8080`
+4. Si esa conexion falla, el navegador muestra "Esta pagina no funciona" o "Conexion rechazada"
+
+**Opcion A — URL manual (lo mas rapido):**
+
+Cuando el navegador falle, busca en la terminal un mensaje como:
+```
+Please open the following URL in your browser:
+https://accounts.google.com/o/oauth2/auth?...
+```
+Abre ese link, aprueba los permisos en Google, y cuando el navegador
+muestre "Esta pagina no funciona" en `localhost:8080`, copia la URL
+completa de la barra del navegador (incluye el parametro `?code=...`)
+y pegala en la terminal cuando te la solicite.
+
+**Opcion B — Service Account (la mas confiable):**
+
+Evita el navegador completamente. Usa una cuenta de servicio de Google Cloud:
+
+1. Ve a [console.cloud.google.com](https://console.cloud.google.com)
+2. Crea un proyecto nuevo (o usa uno existente)
+3. En **APIs y Servicios** → **Biblioteca**, habilita la **Google Drive API**
+4. En **APIs y Servicios** → **Credenciales**, crea una **Cuenta de Servicio**
+5. Descarga el archivo JSON de la clave de la cuenta de servicio
+6. En Google Drive, **comparte el folder `mibici-dvc-remote`** con el email
+   de la cuenta de servicio (lo encuentras en el JSON como `"client_email"`)
+
+Luego configura DVC:
+```bash
+dvc remote modify gdrive gdrive_use_service_account true
+dvc remote modify gdrive gdrive_service_account_json_file_path "ruta/al/credenciales.json"
+
+# Verifica que funcione
+dvc push
+```
+
+La ventaja: no requiere navegador ni interaccion manual. Funciona
+en cualquier entorno, incluyendo Windows PowerShell, CI/CD y servidores remotos.
+
+> **Nota de seguridad:** el archivo JSON de la cuenta de servicio contiene
+> credenciales privadas. Nunca lo incluyas en el repositorio de git.
+> Agrega la ruta al `.gitignore` si es necesario.
+
+---
+
 ### "No such remote 'gdrive'"
 Olvidaste configurar el remote. Ejecuta el Paso 2.
 
-### Error de autenticacion de Google
+### Error de autenticacion de Google (token expirado)
 El token expiro. Elimina la cache de credenciales:
 ```bash
 rm -rf ~/.cache/pydrive2fs/   # Linux/Mac
-# Windows: elimina el folder AppData\Local\pydrive2fs
+# Windows: elimina %LOCALAPPDATA%\pydrive2fs\
 ```
-Luego ejecuta `dvc push` o `dvc pull` de nuevo; abrira el navegador.
+Luego ejecuta `dvc push` o `dvc pull` de nuevo.
+
+### "No module named 'dvc_gdrive'"
+Falta el extra de Google Drive. Instala:
+```bash
+pip install dvc-gdrive==3.0.1
+```
+Actualiza `requirements.txt` con esa version.
 
 ### "dvc: command not found"
 DVC no esta instalado en este entorno. Activa el entorno virtual:
@@ -258,7 +316,7 @@ DVC no esta instalado en este entorno. Activa el entorno virtual:
 source .venv/bin/activate   # Linux/Mac
 .venv\Scripts\activate      # Windows
 ```
-O instalalo directamente: `pip install dvc==3.67.1`.
+O instalalo directamente: `pip install dvc==3.67.1 dvc-gdrive==3.0.1`.
 
 ### "Data and pipelines are up to date" pero los archivos no existen
 Ejecuta `dvc checkout` para restaurar los archivos desde el cache local,
