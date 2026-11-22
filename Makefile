@@ -148,6 +148,11 @@ docker-build:
 docker-run:
 	docker run --rm -p 8000:8000 $(IMAGE):$(TAG)
 
+## Comparar el servicio en http://localhost:8000 contra el @champion local
+.PHONY: check-service
+check-service:
+	$(PYTHON_INTERPRETER) -m mibici.modeling.check_service --image $(IMAGE):$(TAG)
+
 ## Arrancar el servicio FastAPI (Entrega Final)
 .PHONY: api
 api:
