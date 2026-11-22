@@ -14,7 +14,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    # Un hilo por prediccion: con todos los nucleos, servir una fila tardaba
+    # ~3.8 s por la coordinacion de hilos de OpenMP; con uno, ~0.012 s.
+    OMP_NUM_THREADS=1
 
 WORKDIR /app
 
