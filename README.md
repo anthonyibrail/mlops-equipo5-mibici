@@ -120,9 +120,19 @@ antes de proclamar un modelo ganador.
 
 ## Pipeline con DVC (Entrega Final)
 
-El pipeline completo está definido en `dvc.yaml` con cuatro etapas reproducibles:
-`data → features → train → predict`. DVC rastrea los artefactos intermedios y detecta
+El pipeline completo está definido en `dvc.yaml` con cinco etapas reproducibles:
+`data → features → train → predict / drift`. DVC rastrea los artefactos intermedios y detecta
 automáticamente qué etapas necesitan re-ejecutarse cuando cambian sus dependencias.
+
+**Etapas del pipeline:**
+
+| Etapa | Qué hace | Outputs clave |
+|---|---|---|
+| `data` | Ingesta, limpieza y versionado v0/v1 | `data/interim/trips_v*.parquet` |
+| `features` | Panel v3 sin fuga de información | `data/processed/demand_features_v3.parquet` |
+| `train` | Líneas base + entrenamiento + walk-forward + registro | `models/pipeline_*.pkl`, `walk_forward_6_cortes.csv` |
+| `predict` | Inferencia con modelos locales | `data/processed/predicciones.parquet` |
+| `drift` | Simulación de data drift (5 escenarios) | `reports/drift/*.csv`, `reports/figures/drift_*.png` |
 
 **Prerequisito:** tener los CSV descargados en `data/raw/` (`make download`).
 
@@ -165,7 +175,7 @@ Cada push o PR contra `main`/`dev` dispara automáticamente el workflow
 
 1. `ruff format --check` — verifica formato del código
 2. `ruff check` — verifica estilo
-3. `pytest tests/ -q` — corre las 120 pruebas (usan datos sintéticos, no requieren datos reales)
+3. `pytest tests/ -q` — corre las 127 pruebas (usan datos sintéticos, no requieren datos reales)
 
 El workflow de despliegue continuo (`.github/workflows/cd.yml`) construye y sube la imagen
 Docker a DockerHub. Estará activo una vez que el `Dockerfile` esté disponible; hasta entonces

@@ -160,29 +160,27 @@ dvc dag
 
 **Salida esperada** (o similar):
 ```
-     +------+
-     | data |
-     +------+
-         *
-         *
-   +----------+
-   | features |
-   +----------+
-    *        *
-  **          *
- *             **
-+-------+       *
-| train |      **
-+-------+     *
-    *        *
-     **    **
-       *  *
-   +---------+
-   | predict |
-   +---------+
+              +------+
+              | data |
+              +------+
+                  *
+            +----------+
+            | features |
+           *+----------+*
+        ***                ***
+     ***                      ***
+  ***                            ***
+**           +-------+            **
+             | train |
+             +-------+
+         *        *        *
+    +-------+        +---------+
+    | drift |        | predict |
+    +-------+        +---------+
 ```
 
-Criterio cumplido si el DAG muestra las 4 etapas en orden correcto.
+Criterio cumplido si el DAG muestra las 5 etapas con `train` como nodo central
+y `drift` y `predict` dependiendo de él.
 
 ### Criterio 2 - Los parametros de params.yaml son rastreados
 

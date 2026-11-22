@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 DVC_YAML_PATH = ROOT / "dvc.yaml"
 
-EXPECTED_STAGES = {"data", "features", "train", "predict"}
+EXPECTED_STAGES = {"data", "features", "train", "predict", "drift"}
 
 # Archivos Python que deben existir como deps en cada stage
 EXPECTED_DEPS = {
@@ -26,14 +26,20 @@ EXPECTED_DEPS = {
         "mibici/versioning.py",
     ],
     "train": [
-        "mibici/modeling/tune.py",
         "mibici/modeling/validation.py",
+        "mibici/modeling/train.py",
+        "mibici/modeling/tune.py",
         "mibici/modeling/register.py",
         "mibici/modeling/promote.py",
         "mibici/modeling/__init__.py",
     ],
     "predict": [
         "mibici/modeling/predict.py",
+    ],
+    "drift": [
+        "mibici/modeling/drift.py",
+        "mibici/modeling/predict.py",
+        "mibici/modeling/__init__.py",
     ],
 }
 
@@ -141,6 +147,21 @@ def test_params_yaml_referenced_as_dep():
     assert len(stages_with_params) > 0, (
         "Ningun stage referencia params.yaml. "
         "Al menos 'train' y 'features' deberian tener 'params'."
+    )
+
+
+def test_train_cmd_includes_train_py():
+    """El stage 'train' debe ejecutar python -m mibici.modeling.train para crear los pkl.
+
+    train.py es quien guarda models/pipeline_salidas.pkl y models/pipeline_llegadas.pkl.
+    register.py solo sube al MLflow Model Registry, no sobreescribe los pkl locales.
+    predict --source local necesita esos pkl, por lo que train.py es obligatorio.
+    """
+    content = _load_dvc_yaml()
+    cmd = content["stages"]["train"]["cmd"]
+    assert "mibici.modeling.train" in cmd, (
+        "El stage 'train' debe incluir 'python -m mibici.modeling.train'. "
+        "Sin esto, los pkl en models/ no se crean y predict --source local falla."
     )
 
 
@@ -280,4 +301,81 @@ def test_predict_depends_on_train_outputs():
     assert expected.issubset(set(predict_deps)), (
         f"'predict' no depende de todos los modelos de 'train': "
         f"{expected - set(predict_deps)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tests del stage drift
+# ---------------------------------------------------------------------------
+
+
+def test_drift_stage_exists():
+    """El pipeline debe tener un stage 'drift' para la simulacion de data drift."""
+    content = _load_dvc_yaml()
+    assert "drift" in content["stages"], (
+        "No existe el stage 'drift' en dvc.yaml. "
+        "El Makefile pipeline-train incluye 'make drift' como ultima etapa."
+    )
+
+
+def test_drift_uses_local_source():
+    """El stage 'drift' debe usar --source local para leer los pkl del DVC pipeline."""
+    content = _load_dvc_yaml()
+    cmd = content["stages"]["drift"].get("cmd", "")
+    assert "--source local" in cmd, (
+        "El stage 'drift' debe usar '--source local' para cargar los pkl "
+        "gestionados por DVC en lugar del MLflow Model Registry."
+    )
+
+
+def test_drift_depends_on_train_outputs():
+    """'drift' debe depender de los pkl del stage 'train'."""
+    content = _load_dvc_yaml()
+    drift_deps = content["stages"]["drift"].get("deps", [])
+    expected = {
+        "models/pipeline_salidas.pkl",
+        "models/pipeline_llegadas.pkl",
+    }
+    assert expected.issubset(set(drift_deps)), (
+        f"'drift' no depende de los modelos generados por 'train': "
+        f"{expected - set(drift_deps)}"
+    )
+
+
+def test_drift_depends_on_features_panel():
+    """'drift' debe depender del panel de features v3."""
+    content = _load_dvc_yaml()
+    drift_deps = content["stages"]["drift"].get("deps", [])
+    assert "data/processed/demand_features_v3.parquet" in drift_deps, (
+        "'drift' necesita el panel v3 para simular los escenarios de drift."
+    )
+
+
+def test_drift_has_params():
+    """'drift' debe referenciar la seccion 'drift' de params.yaml."""
+    content = _load_dvc_yaml()
+    drift_params = content["stages"]["drift"].get("params", [])
+    param_keys = []
+    for item in drift_params:
+        if isinstance(item, dict):
+            for vals in item.values():
+                param_keys.extend(vals if vals else [])
+    assert "drift" in param_keys, (
+        "El stage 'drift' debe referenciar la seccion 'drift' de params.yaml "
+        "(umbrales PSI, escenarios, etc.)."
+    )
+
+
+def test_drift_produces_summary_csv():
+    """'drift' debe producir reports/drift/resumen_drift.csv."""
+    content = _load_dvc_yaml()
+    drift_outs = content["stages"]["drift"].get("outs", [])
+    out_paths = []
+    for item in drift_outs:
+        if isinstance(item, str):
+            out_paths.append(item)
+        elif isinstance(item, dict):
+            out_paths.extend(item.keys())
+    assert "reports/drift/resumen_drift.csv" in out_paths, (
+        "'drift' debe declarar 'reports/drift/resumen_drift.csv' como output."
     )
