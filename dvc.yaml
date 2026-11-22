@@ -1,0 +1,105 @@
+# Pipeline reproducible del proyecto MiBici con DVC (Entrega Final).
+#
+# Uso rapido:
+#   dvc repro          -- Ejecuta solo los stages con inputs modificados
+#   dvc repro -f       -- Fuerza la re-ejecucion de todos los stages
+#   dvc dag            -- Muestra el grafo de dependencias
+#   dvc params show    -- Muestra los parametros rastreados en params.yaml
+#   dvc status         -- Compara el estado actual con el ultimo dvc repro
+#
+# Prerequisito: haber descargado los datos con `make download` o
+#   `python -m mibici.dataset download --start 2024-01 --end 2026-09`
+
+stages:
+
+  # -------------------------------------------------------------------------
+  # Etapa 1: ingesta, limpieza y versionado de datos
+  # Input : data/raw/ (CSV mensuales, generados por make download)
+  # Output: data/interim/trips_v0.parquet  -- viajes crudos unificados
+  #         data/interim/trips_v1.parquet  -- viajes limpios
+  # -------------------------------------------------------------------------
+  data:
+    cmd: >-
+      python -m mibici.dataset build &&
+      python -m mibici.cleaning &&
+      python -m mibici.versioning v0 &&
+      python -m mibici.versioning v1 --parent v0
+    deps:
+      - mibici/dataset.py
+      - mibici/cleaning.py
+      - mibici/versioning.py
+      - data/raw/
+    outs:
+      - data/interim/trips_v0.parquet
+      - data/interim/trips_v1.parquet
+
+  # -------------------------------------------------------------------------
+  # Etapa 2: ingenieria de features (panel v3 sin fuga de informacion)
+  # Input : data/interim/trips_v1.parquet
+  # Output: data/processed/demand_features_v3.parquet (11.3 M filas x 20 cols)
+  # Params rastreados: problema (objetivos, rezago_minimo_horas, horas_pico)
+  # -------------------------------------------------------------------------
+  features:
+    cmd: >-
+      python -m mibici.features build-v3 &&
+      python -m mibici.versioning v3 --parent v1 --date-col hora_inicio
+    deps:
+      - mibici/features.py
+      - mibici/versioning.py
+      - data/interim/trips_v1.parquet
+    params:
+      - params.yaml:
+          - problema
+    outs:
+      - data/processed/demand_features_v3.parquet
+
+  # -------------------------------------------------------------------------
+  # Etapa 3: evaluacion walk-forward y entrenamiento final del modelo
+  # Lee los hiperparametros ganadores de reports/model_selection/tuning_winners.json
+  # (ese archivo fue ajustado manualmente; no lo sobreescribe esta etapa).
+  # Output: models/pipeline_salidas.pkl, models/pipeline_llegadas.pkl
+  #         reports/model_selection/walk_forward_6_cortes.csv  (metrica DVC)
+  # -------------------------------------------------------------------------
+  train:
+    cmd: >-
+      python -m mibici.modeling.tune evaluate &&
+      python -m mibici.modeling.register &&
+      python -m mibici.modeling.promote
+    deps:
+      - mibici/modeling/tune.py
+      - mibici/modeling/validation.py
+      - mibici/modeling/register.py
+      - mibici/modeling/promote.py
+      - mibici/modeling/__init__.py
+      - data/processed/demand_features_v3.parquet
+      - reports/model_selection/tuning_winners.json
+    params:
+      - params.yaml:
+          - modelos
+          - validacion
+          - mlflow
+          - promocion
+    outs:
+      - models/pipeline_salidas.pkl
+      - models/pipeline_llegadas.pkl
+    metrics:
+      - reports/model_selection/walk_forward_6_cortes.csv:
+          cache: false
+
+  # -------------------------------------------------------------------------
+  # Etapa 4: inferencia con el modelo entrenado localmente
+  # Usa los pkl generados en la etapa train (no el Model Registry).
+  # Output: data/processed/predicciones.parquet
+  # -------------------------------------------------------------------------
+  predict:
+    cmd: python -m mibici.modeling.predict --source local
+    deps:
+      - mibici/modeling/predict.py
+      - models/pipeline_salidas.pkl
+      - models/pipeline_llegadas.pkl
+      - data/processed/demand_features_v3.parquet
+    params:
+      - params.yaml:
+          - datos
+    outs:
+      - data/processed/predicciones.parquet

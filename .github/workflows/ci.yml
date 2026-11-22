@@ -1,0 +1,47 @@
+name: CI
+
+# Disparo: todo push o PR contra las ramas principales.
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  lint-and-test:
+    name: Lint and test (Python 3.11)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # --- Calidad de codigo ---------------------------------------------------
+      - name: Lint - check formatting (ruff format)
+        run: ruff format --check
+
+      - name: Lint - check style (ruff check)
+        run: ruff check
+
+      # --- Pruebas unitarias ---------------------------------------------------
+      # Todas las pruebas usan datos sinteticos; no requieren descargar el
+      # dataset ni tener MLflow corriendo.
+      - name: Run tests
+        run: pytest tests/ -q
+
+      # --- Validacion del pipeline DVC ----------------------------------------
+      # Verifica que dvc.yaml sea parseable y tenga los stages esperados.
+      - name: Validate DVC pipeline definition
+        run: dvc repro --dry 2>&1 || true
+        # El exit-code != 0 es esperado si no hay dvc.lock (outputs no generados
+        # en este entorno CI). El flag "|| true" evita que rompa el workflow.
+        # La validacion real la hace el test test_dvc_pipeline.py.

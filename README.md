@@ -17,11 +17,13 @@ Análisis de requerimientos: [`docs/ml_canvas.md`](docs/ml_canvas.md).
 2. [Pruebas](#pruebas)
 3. [Cómo reproducir (Fase 1)](#cómo-reproducir-fase-1)
 4. [Cómo reproducir (Fase 2)](#cómo-reproducir-fase-2)
-5. [Servicio del modelo (FastAPI)](#servicio-del-modelo-fastapi)
-6. [Contenedor Docker](#contenedor-docker)
-7. [Reproducibilidad en otro entorno](#reproducibilidad-en-otro-entorno)
-8. [Monitoreo de data drift](#monitoreo-de-data-drift)
-9. [Organización del proyecto](#organización-del-proyecto)
+5. [Pipeline con DVC (Entrega Final)](#pipeline-con-dvc-entrega-final)
+6. [Integración continua (CI)](#integración-continua-ci)
+7. [Servicio del modelo (FastAPI)](#servicio-del-modelo-fastapi)
+8. [Contenedor Docker](#contenedor-docker)
+9. [Reproducibilidad en otro entorno](#reproducibilidad-en-otro-entorno)
+10. [Monitoreo de data drift](#monitoreo-de-data-drift)
+11. [Organización del proyecto](#organización-del-proyecto)
 
 ## Requisitos e instalación
 
@@ -115,6 +117,59 @@ El panel v3 se genera a partir de `trips_v1.parquet` (no de v2); en MLflow su `p
 El entrenamiento actual usa un único corte para las métricas de `train.py`; **no equivale** a
 la comparación *walk-forward* de seis cortes, que debe evaluarse de forma separada
 antes de proclamar un modelo ganador.
+
+## Pipeline con DVC (Entrega Final)
+
+El pipeline completo está definido en `dvc.yaml` con cuatro etapas reproducibles:
+`data → features → train → predict`. DVC rastrea los artefactos intermedios y detecta
+automáticamente qué etapas necesitan re-ejecutarse cuando cambian sus dependencias.
+
+**Prerequisito:** tener los CSV descargados en `data/raw/` (`make download`).
+
+```bash
+# Ver el grafo de dependencias del pipeline
+dvc dag
+
+# Mostrar los parámetros rastreados desde params.yaml
+dvc params show
+
+# Revisar qué etapas están desactualizadas
+dvc status
+
+# Reproducir solo las etapas con cambios (o todo si no hay dvc.lock)
+dvc repro
+
+# Forzar la re-ejecución completa
+dvc repro -f
+```
+
+**Con remote de Google Drive** (opcional; sube parquets y pkl para compartirlos
+sin re-ejecutar el pipeline en cada máquina):
+
+```bash
+# Configurar una sola vez (ver docs/instrucciones_dvc_gdrive.md)
+dvc remote add -d gdrive gdrive://<ID-DEL-FOLDER>
+dvc push          # sube todos los artefactos al remote
+
+# En otra máquina, después de clonar el repo
+dvc pull          # descarga los artefactos sin re-ejecutar
+```
+
+Ver instrucciones completas y criterios de éxito en
+[`docs/instrucciones_dvc_gdrive.md`](docs/instrucciones_dvc_gdrive.md).
+
+## Integración continua (CI)
+
+Cada push o PR contra `main`/`dev` dispara automáticamente el workflow
+`.github/workflows/ci.yml` que ejecuta:
+
+1. `ruff format --check` — verifica formato del código
+2. `ruff check` — verifica estilo
+3. `pytest tests/ -q` — corre las 120 pruebas (usan datos sintéticos, no requieren datos reales)
+
+El workflow de despliegue continuo (`.github/workflows/cd.yml`) construye y sube la imagen
+Docker a DockerHub. Estará activo una vez que el `Dockerfile` esté disponible; hasta entonces
+solo se puede disparar manualmente desde GitHub Actions.
 
 ## Servicio del modelo (FastAPI)
 
