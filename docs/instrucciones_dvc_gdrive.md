@@ -72,7 +72,7 @@ git commit -m "feat(dvc): add Google Drive remote"
 
 ## Paso 3 - Ejecutar el pipeline y subir los artefactos
 
-Si los artefactos YA existen localmente (el pipeline se ejecuto con make):
+Si los artefactos YA existen localmente (el pipeline ya se ejecuto antes):
 
 ```bash
 # Registra los artefactos existentes en el cache de DVC
@@ -87,14 +87,33 @@ Si vas a ejecutar el pipeline desde cero con DVC:
 
 ```bash
 # Primero descarga los datos crudos
-make download
+# NOTA: "make download" solo funciona en Linux/Mac o Git Bash.
+# En Windows PowerShell usa el comando Python directamente:
+python -m mibici.dataset download --start 2024-01 --end 2026-09
 
 # Luego reproduce el pipeline completo via DVC
+# (DVC llama internamente a los comandos de cada stage)
 dvc repro
 
 # Sube los artefactos al remote
 dvc push
 ```
+
+**Nota para usuarios de Windows (PowerShell):** `make` no esta disponible
+en PowerShell por defecto. Todas las instrucciones que usan `make <target>`
+tienen su equivalente directo en Python:
+
+| Comando make | Equivalente Python |
+|---|---|
+| `make download` | `python -m mibici.dataset download --start 2024-01 --end 2026-09` |
+| `make data` | `python -m mibici.dataset build && python -m mibici.cleaning && ...` |
+| `make features-v3` | `python -m mibici.features build-v3` |
+| `make train` | `python -m mibici.modeling.tune evaluate` |
+| `make predict` | `python -m mibici.modeling.predict --source local` |
+| `make test` | `pytest tests/ -q` |
+
+Con DVC, ninguno de esos comandos es necesario manualmente:
+`dvc repro` los ejecuta en orden automaticamente.
 
 La primera vez que ejecutes `dvc push` o `dvc pull`, Google abrira una ventana
 del navegador pidiendo autorizacion OAuth. Acepta los permisos y el token
