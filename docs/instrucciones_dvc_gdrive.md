@@ -271,8 +271,12 @@ Evita el navegador completamente. Usa una cuenta de servicio de Google Cloud:
 3. En **APIs y Servicios** → **Biblioteca**, habilita la **Google Drive API**
 4. En **APIs y Servicios** → **Credenciales**, crea una **Cuenta de Servicio**
 5. Descarga el archivo JSON de la clave de la cuenta de servicio
-6. En Google Drive, **comparte el folder `mibici-dvc-remote`** con el email
-   de la cuenta de servicio (lo encuentras en el JSON como `"client_email"`)
+6. **IMPORTANTE: Las Service Accounts NO tienen cuota en Google Drive personal.**
+   Debes compartirles una **Unidad compartida (Shared Drive)**:
+   - En Google Drive, crea una Unidad compartida (requiere Google Workspace)
+   - O crea un folder dentro de una Unidad compartida existente
+   - Comparte ese folder con el email de la cuenta de servicio (`client_email` en el JSON)
+   - Usa el ID de ese folder (no el de un folder en Mi unidad)
 
 Luego configura DVC:
 ```bash
@@ -283,14 +287,49 @@ dvc remote modify gdrive gdrive_service_account_json_file_path "ruta/al/credenci
 dvc push
 ```
 
-La ventaja: no requiere navegador ni interaccion manual. Funciona
-en cualquier entorno, incluyendo Windows PowerShell, CI/CD y servidores remotos.
+> **Nota:** Si ves el error `Service Accounts do not have storage quota`,
+> el folder configurado esta en "Mi unidad" (personal) y no en una
+> Unidad compartida. Ver la seccion de resolucion de problemas.
 
-> **Nota de seguridad:** el archivo JSON de la cuenta de servicio contiene
-> credenciales privadas. Nunca lo incluyas en el repositorio de git.
-> Agrega la ruta al `.gitignore` si es necesario.
+La ventaja cuando funciona: no requiere navegador ni interaccion manual.
+
+**Opcion C — Volver a OAuth estandar (la mas sencilla si no tienes Shared Drive):**
+
+Si no tienes acceso a Google Workspace, usa OAuth estandar en lugar de service account:
+
+```bash
+# Elimina la configuracion de service account
+dvc remote modify --unset gdrive gdrive_service_account_json_file_path
+dvc remote modify gdrive gdrive_use_service_account false
+
+# Vuelve a intentar - abrira el navegador para autenticarte
+dvc push
+```
 
 ---
+
+### El error "Service Accounts do not have storage quota"
+
+Este error ocurre cuando la cuenta de servicio intenta escribir en un folder
+de **Mi unidad** (almacenamiento personal de Google). Las service accounts
+no tienen cuota de almacenamiento propia en Drive personal.
+
+**Solucion A (con Google Workspace):** Usar una Unidad compartida.
+1. Crea una Unidad compartida en Google Drive (requiere Google Workspace / G Suite)
+2. Crea un folder dentro de esa Unidad compartida
+3. Comparte el folder con el email de la service account (`client_email` en el JSON)
+4. Actualiza el remote con el ID del folder en la Unidad compartida:
+   ```bash
+   dvc remote modify gdrive url gdrive://<ID-NUEVO-FOLDER-SHARED-DRIVE>
+   dvc push
+   ```
+
+**Solucion B (sin Google Workspace):** Volver a OAuth estandar.
+```bash
+dvc remote modify --unset gdrive gdrive_service_account_json_file_path
+dvc remote modify gdrive gdrive_use_service_account false
+dvc push  # abrira el navegador para autenticarte
+```
 
 ### "No such remote 'gdrive'"
 Olvidaste configurar el remote. Ejecuta el Paso 2.
