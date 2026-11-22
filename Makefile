@@ -130,8 +130,12 @@ promote:
 predict:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.predict
 
-## Simulacion de data drift y alertas con el modelo @champion
-.PHONY: drift
+## Arrancar el servicio FastAPI (Entrega Final)
+.PHONY: api
+api:
+	$(PYTHON_INTERPRETER) -m uvicorn mibici.api.main:app --reload --port 8000
+	# Swagger disponible en http://localhost:8000/docs
+
 drift:
 	$(PYTHON_INTERPRETER) -m mibici.modeling.drift
 
