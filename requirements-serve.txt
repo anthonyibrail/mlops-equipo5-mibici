@@ -1,0 +1,14 @@
+# Dependencias minimas del servicio FastAPI (imagen Docker).
+# Mismas versiones que requirements.txt; se omiten Jupyter, DVC, pruebas y el
+# servidor de MLflow, que no se usan al servir el modelo.
+fastapi==0.159.1
+uvicorn==0.54.0
+pandas==3.1.0
+numpy==2.4.6
+scikit-learn==1.9.1
+loguru==0.7.3
+python-dotenv==1.2.4
+pyyaml==6.0.3
+typer==0.27.3
+# train.py y versioning.py importan mlflow; mlflow-skinny basta para importarlo
+mlflow-skinny==3.17.2

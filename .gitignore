@@ -8,6 +8,13 @@
 *.swp
 *.swo
 
+# Credenciales de Google Cloud (service account) - NUNCA commitear
+key.json
+*-credentials.json
+*-service-account.json
+service_account*.json
+gcp_key*.json
+
 ## https://github.com/github/gitignore/blob/e8554d85bf62e38d6db966a50d2064ac025fd82a/Python.gitignore
 
 # Byte-compiled / optimized / DLL files
@@ -198,3 +205,4 @@ mlartifacts/
 # Local environment and trained models
 .venv-uv/
 models/*.pkl
+models/champion/*.pkl

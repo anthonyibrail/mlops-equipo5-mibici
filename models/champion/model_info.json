@@ -1,0 +1,21 @@
+{
+  "exportado": "2026-11-22T18:59:12+00:00",
+  "modelos": {
+    "salidas": {
+      "nombre": "mibici-demanda-salidas",
+      "version": 1,
+      "alias": "champion",
+      "uri": "models:/mibici-demanda-salidas/1",
+      "run_id": "66d6a20597f84259987c3b5dec78f001",
+      "archivo": "pipeline_salidas.pkl"
+    },
+    "llegadas": {
+      "nombre": "mibici-demanda-llegadas",
+      "version": 1,
+      "alias": "champion",
+      "uri": "models:/mibici-demanda-llegadas/1",
+      "run_id": "8fa990221b1b4d01b292cfd8b7565590",
+      "archivo": "pipeline_llegadas.pkl"
+    }
+  }
+}

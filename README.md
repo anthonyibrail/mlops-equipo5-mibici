@@ -17,11 +17,13 @@ Análisis de requerimientos: [`docs/ml_canvas.md`](docs/ml_canvas.md).
 2. [Pruebas](#pruebas)
 3. [Cómo reproducir (Fase 1)](#cómo-reproducir-fase-1)
 4. [Cómo reproducir (Fase 2)](#cómo-reproducir-fase-2)
-5. [Servicio del modelo (FastAPI)](#servicio-del-modelo-fastapi)
-6. [Contenedor Docker](#contenedor-docker)
-7. [Reproducibilidad en otro entorno](#reproducibilidad-en-otro-entorno)
-8. [Monitoreo de data drift](#monitoreo-de-data-drift)
-9. [Organización del proyecto](#organización-del-proyecto)
+5. [Pipeline con DVC (Entrega Final)](#pipeline-con-dvc-entrega-final)
+6. [Integración continua (CI)](#integración-continua-ci)
+7. [Servicio del modelo (FastAPI)](#servicio-del-modelo-fastapi)
+8. [Contenedor Docker](#contenedor-docker)
+9. [Reproducibilidad en otro entorno](#reproducibilidad-en-otro-entorno)
+10. [Monitoreo de data drift](#monitoreo-de-data-drift)
+11. [Organización del proyecto](#organización-del-proyecto)
 
 ## Requisitos e instalación
 
@@ -116,6 +118,69 @@ El entrenamiento actual usa un único corte para las métricas de `train.py`; **
 la comparación *walk-forward* de seis cortes, que debe evaluarse de forma separada
 antes de proclamar un modelo ganador.
 
+## Pipeline con DVC (Entrega Final)
+
+El pipeline completo está definido en `dvc.yaml` con cinco etapas reproducibles:
+`data → features → train → predict / drift`. DVC rastrea los artefactos intermedios y detecta
+automáticamente qué etapas necesitan re-ejecutarse cuando cambian sus dependencias.
+
+**Etapas del pipeline:**
+
+| Etapa | Qué hace | Outputs clave |
+|---|---|---|
+| `data` | Ingesta, limpieza y versionado v0/v1 | `data/interim/trips_v*.parquet` |
+| `features` | Panel v3 sin fuga de información | `data/processed/demand_features_v3.parquet` |
+| `train` | Líneas base + entrenamiento + walk-forward + registro | `models/pipeline_*.pkl`, `walk_forward_6_cortes.csv` |
+| `predict` | Inferencia con modelos locales | `data/processed/predicciones.parquet` |
+| `drift` | Simulación de data drift (5 escenarios) | `reports/drift/*.csv`, `reports/figures/drift_*.png` |
+
+**Prerequisito:** tener los CSV descargados en `data/raw/` (`make download`).
+
+```bash
+# Ver el grafo de dependencias del pipeline
+dvc dag
+
+# Mostrar los parámetros rastreados desde params.yaml
+dvc params show
+
+# Revisar qué etapas están desactualizadas
+dvc status
+
+# Reproducir solo las etapas con cambios (o todo si no hay dvc.lock)
+dvc repro
+
+# Forzar la re-ejecución completa
+dvc repro -f
+```
+
+**Con remote de Google Drive** (opcional; sube parquets y pkl para compartirlos
+sin re-ejecutar el pipeline en cada máquina):
+
+```bash
+# Configurar una sola vez (ver docs/instrucciones_dvc_gdrive.md)
+dvc remote add -d gdrive gdrive://<ID-DEL-FOLDER>
+dvc push          # sube todos los artefactos al remote
+
+# En otra máquina, después de clonar el repo
+dvc pull          # descarga los artefactos sin re-ejecutar
+```
+
+Ver instrucciones completas y criterios de éxito en
+[`docs/instrucciones_dvc_gdrive.md`](docs/instrucciones_dvc_gdrive.md).
+
+## Integración continua (CI)
+
+Cada push o PR contra `main`/`dev` dispara automáticamente el workflow
+`.github/workflows/ci.yml` que ejecuta:
+
+1. `ruff format --check` — verifica formato del código
+2. `ruff check` — verifica estilo
+3. `pytest tests/ -q` — corre las 127 pruebas (usan datos sintéticos, no requieren datos reales)
+
+El workflow de despliegue continuo (`.github/workflows/cd.yml`) construye y sube la imagen
+Docker a DockerHub. Estará activo una vez que el `Dockerfile` esté disponible; hasta entonces
+solo se puede disparar manualmente desde GitHub Actions.
+
 ## Servicio del modelo (FastAPI)
 
 _Pendiente: endpoint `POST /predict`, esquema de entrada y salida (Swagger en `/docs`) y
@@ -124,13 +189,73 @@ ruta del artefacto del modelo (`models:/mibici-demanda-salidas@champion` y
 
 ## Contenedor Docker
 
-_Pendiente: `docker build -t ml-service:latest .`, `docker run -p 8000:8000 ml-service:latest`
-y liga a la imagen publicada en DockerHub con sus tags versionados._
+Imagen publicada en DockerHub: [efrainpb/ml-service](https://hub.docker.com/r/efrainpb/ml-service)
+
+| Tag | Contenido |
+|---|---|
+| `1.0.1`, `latest` | Servicio FastAPI con los modelos @champion y `OMP_NUM_THREADS=1` (versión recomendada) |
+| `1.0.0` | Primera versión; tarda ~3.8 s por predicción por la coordinación de hilos de OpenMP |
+
+Modelos empaquetados en la imagen (detalle en `models/champion/model_info.json`):
+
+- Salidas: `models:/mibici-demanda-salidas/1` (alias `@champion`)
+- Llegadas: `models:/mibici-demanda-llegadas/1` (alias `@champion`)
+
+**Usar la imagen publicada:**
+
+```bash
+docker run -p 8000:8000 efrainpb/ml-service:1.0.1
+# Swagger: http://localhost:8000/docs
+```
+
+**Construir la imagen desde el repositorio** (requiere los modelos @champion en el MLflow local,
+es decir, haber corrido `make pipeline-train`):
+
+```bash
+make export-model                          # models:/...@champion -> models/champion/
+docker build -t ml-service:latest .        # o bien: make docker-build
+docker run -p 8000:8000 ml-service:latest  # o bien: make docker-run
+```
+
+Decisiones de la imagen:
+
+- **Modelos exportados, no la base de MLflow:** el Model Registry guarda rutas absolutas de la
+  máquina de entrenamiento, así que `make export-model` (`mibici/modeling/export.py`) guarda cada
+  modelo @champion como archivo y registra su versión en `model_info.json`.
+- **Dependencias mínimas:** `requirements-serve.txt` con las mismas versiones fijas del proyecto,
+  sin Jupyter, DVC ni herramientas de prueba.
+- **`OMP_NUM_THREADS=1`:** scikit-learn usa por defecto todos los núcleos para cada predicción;
+  para una sola fila, coordinar los hilos costaba ~3.8 s por petición. Con un hilo, ~0.012 s.
+- **Seguridad:** el servicio corre con un usuario sin privilegios y la imagen incluye un chequeo
+  de salud sobre `/health`.
 
 ## Reproducibilidad en otro entorno
 
-_Pendiente: ejecución del pipeline y del servicio en un entorno limpio y comparación de
-métricas y salidas contra las de referencia._
+Base: Python 3.11, dependencias con versiones fijas (`requirements.txt` y `requirements-serve.txt`),
+semilla 42 en `params.yaml` y versiones de datos y modelos registradas en MLflow.
+
+**Prueba del modelo desplegado.** La imagen `1.0.1` se descargó de DockerHub, sin imágenes
+locales, y sus predicciones se compararon contra el modelo @champion cargado del Model Registry
+fuera del contenedor, con 1,000 filas reales de abril de 2026 elegidas con la semilla fija:
+
+```bash
+docker run -d -p 8000:8000 efrainpb/ml-service:1.0.1
+make check-service IMAGE=efrainpb/ml-service TAG=1.0.1
+```
+
+| Objetivo | Filas idénticas | Diferencia máxima | MAE fuera del contenedor | MAE en el contenedor |
+|---|---|---|---|---|
+| Salidas | 1,000 / 1,000 | 0 | 0.5337 | 0.5337 |
+| Llegadas | 1,000 / 1,000 | 0 | 0.5774 | 0.5774 |
+
+El detalle queda en `reports/reproducibilidad/` y en el run `reproducibilidad_servicio` del
+experimento `mibici-modelos`. El MAE de esta muestra no mide el desempeño del modelo, porque el
+@champion se reentrenó con datos que incluyen abril; las métricas de desempeño son las de la
+validación walk-forward.
+
+**Antecedentes.** En las fases 1 y 2, el pipeline de datos y la validación walk-forward se
+ejecutaron desde cero en una segunda computadora: las versiones v0 y v1 tuvieron las mismas
+filas que el original y el reporte `walk_forward_6_cortes.csv` resultó idéntico byte por byte.
 
 ## Monitoreo de data drift
 

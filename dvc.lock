@@ -1,0 +1,312 @@
+schema: '2.0'
+stages:
+  data:
+    cmd: python -m mibici.dataset build && python -m mibici.cleaning && python 
+      -m mibici.versioning v0 && python -m mibici.versioning v1 --parent v0
+    deps:
+    - path: data/raw/
+      hash: md5
+      md5: 5896c06755c9cf4d0fd68ac406e1467c.dir
+      size: 1070108159
+      nfiles: 34
+    - path: mibici/cleaning.py
+      hash: md5
+      md5: 83353b9785165a07b1ff43e8c387d25b
+      size: 7760
+    - path: mibici/dataset.py
+      hash: md5
+      md5: f5f8ef726060098d0085b12440682be0
+      size: 6859
+    - path: mibici/versioning.py
+      hash: md5
+      md5: 6aed48993d08117e22532e4bba2b9a86
+      size: 8161
+    outs:
+    - path: data/interim/trips_v0.parquet
+      hash: md5
+      md5: 30ae097a9e756fe8929702adac9e00f6
+      size: 273821798
+    - path: data/interim/trips_v1.parquet
+      hash: md5
+      md5: a4460eefe7c78ccd33633478a1e39a57
+      size: 310590263
+  features:
+    cmd: python -m mibici.features build-v3 && python -m mibici.versioning v3 
+      --parent v1 --date-col hora_inicio
+    deps:
+    - path: data/interim/trips_v1.parquet
+      hash: md5
+      md5: a4460eefe7c78ccd33633478a1e39a57
+      size: 310590263
+    - path: mibici/features.py
+      hash: md5
+      md5: 42d5f351b3014ea3dde878204c00e98e
+      size: 11477
+    - path: mibici/versioning.py
+      hash: md5
+      md5: 6aed48993d08117e22532e4bba2b9a86
+      size: 8161
+    params:
+      params.yaml:
+        problema:
+          objetivos:
+          - salidas
+          - llegadas
+          hora_pronostico: 0
+          horizonte_horas: 24
+          rezago_minimo_horas: 24
+          horas_pico:
+          - 7
+          - 8
+          - 9
+          - 17
+          - 18
+          - 19
+    outs:
+    - path: data/processed/demand_features_v3.parquet
+      hash: md5
+      md5: 660a65e7c49eb4ff533e1137fa37ec01
+      size: 79954441
+  train:
+    cmd: python -m mibici.modeling.validation && python -m mibici.modeling.train
+      && python -m mibici.modeling.tune evaluate && python -m 
+      mibici.modeling.register && python -m mibici.modeling.promote
+    deps:
+    - path: data/processed/demand_features_v3.parquet
+      hash: md5
+      md5: 660a65e7c49eb4ff533e1137fa37ec01
+      size: 79954441
+    - path: mibici/modeling/__init__.py
+      hash: md5
+      md5: f92edadf50d717c661992ee18571632d
+      size: 580
+    - path: mibici/modeling/promote.py
+      hash: md5
+      md5: 8a35c3267f854a15fd07eecaa79ea014
+      size: 7285
+    - path: mibici/modeling/register.py
+      hash: md5
+      md5: 7615f88344b8a302295a9f29719c6b00
+      size: 8790
+    - path: mibici/modeling/train.py
+      hash: md5
+      md5: accb9ccf2254123f90caf88303cb06ec
+      size: 6848
+    - path: mibici/modeling/tune.py
+      hash: md5
+      md5: fbec423842a8c1c4306f55c53e514670
+      size: 14573
+    - path: mibici/modeling/validation.py
+      hash: md5
+      md5: 3776c87c4c7ca23b3445b47304eea999
+      size: 12428
+    - path: reports/model_selection/tuning_winners.json
+      hash: md5
+      md5: c924434422d6ef90f99128eff6f7b4af
+      size: 1116
+    params:
+      params.yaml:
+        mlflow:
+          experimento_modelos: mibici-modelos
+          modelo_registrado: mibici-demanda
+        modelos:
+          hist_gbr:
+            fijos:
+              loss: poisson
+              max_iter: 300
+              learning_rate: 0.05
+              max_leaf_nodes: 31
+              min_samples_leaf: 100
+              l2_regularization: 1.0
+            busqueda:
+              n_iter: 10
+              espacio:
+                learning_rate:
+                - 0.03
+                - 0.05
+                - 0.1
+                max_leaf_nodes:
+                - 31
+                - 63
+                - 127
+                min_samples_leaf:
+                - 20
+                - 50
+                - 100
+                l2_regularization:
+                - 0.0
+                - 0.1
+                - 1.0
+        promocion:
+          alias_candidato: candidate
+          alias_produccion: champion
+          linea_base_referencia: promedio_historico
+          criterios:
+          - salidas
+          - llegadas
+          - balance
+        validacion:
+          columna_tiempo: hora_inicio
+          primer_mes_prueba: 2026-04
+          n_cortes: 6
+          meses_prueba: 1
+          meses_entrenamiento: 12
+    outs:
+    - path: models/pipeline_llegadas.pkl
+      hash: md5
+      md5: 4e3eabcf60d44c25e23fe5d7a3371af7
+      size: 1085489
+    - path: models/pipeline_salidas.pkl
+      hash: md5
+      md5: 7dec1a0bc401d6f9411f09e6eecd69ac
+      size: 1085489
+    - path: reports/model_selection/walk_forward_6_cortes.csv
+      hash: md5
+      md5: 399c5e4daa969fb615ce63e0c7302cbb
+      size: 2370
+  predict:
+    cmd: python -m mibici.modeling.predict --source local
+    deps:
+    - path: data/processed/demand_features_v3.parquet
+      hash: md5
+      md5: 660a65e7c49eb4ff533e1137fa37ec01
+      size: 79954441
+    - path: mibici/modeling/predict.py
+      hash: md5
+      md5: 1b2d5c76beacb9907f08a1edc17ed080
+      size: 4804
+    - path: models/pipeline_llegadas.pkl
+      hash: md5
+      md5: 4e3eabcf60d44c25e23fe5d7a3371af7
+      size: 1085489
+    - path: models/pipeline_salidas.pkl
+      hash: md5
+      md5: 7dec1a0bc401d6f9411f09e6eecd69ac
+      size: 1085489
+    params:
+      params.yaml:
+        datos:
+          viajes: data/interim/trips_v1.parquet
+          features: data/processed/demand_features_v3.parquet
+    outs:
+    - path: data/processed/predicciones.parquet
+      hash: md5
+      md5: f01e0debbc0f8504afdaba43c7b2a51f
+      size: 37073031
+  drift:
+    cmd: python -m mibici.modeling.drift --source local
+    deps:
+    - path: data/processed/demand_features_v3.parquet
+      hash: md5
+      md5: 660a65e7c49eb4ff533e1137fa37ec01
+      size: 79954441
+    - path: mibici/modeling/__init__.py
+      hash: md5
+      md5: f92edadf50d717c661992ee18571632d
+      size: 580
+    - path: mibici/modeling/drift.py
+      hash: md5
+      md5: cec907af113bd64666b90c17e7330220
+      size: 19303
+    - path: mibici/modeling/predict.py
+      hash: md5
+      md5: 1b2d5c76beacb9907f08a1edc17ed080
+      size: 4804
+    - path: models/pipeline_llegadas.pkl
+      hash: md5
+      md5: 4e3eabcf60d44c25e23fe5d7a3371af7
+      size: 1085489
+    - path: models/pipeline_salidas.pkl
+      hash: md5
+      md5: 7dec1a0bc401d6f9411f09e6eecd69ac
+      size: 1085489
+    params:
+      params.yaml:
+        drift:
+          experimento: mibici-monitoreo
+          columnas_monitoreo:
+          - salidas_lag_24h
+          - salidas_lag_48h
+          - salidas_lag_168h
+          - llegadas_lag_24h
+          - llegadas_lag_168h
+          - media_7d
+          - salidas_sistema_lag_24h
+          bins_psi: 10
+          umbrales:
+            psi_aviso: 0.1
+            psi_alerta: 0.25
+            faltantes_alerta: 0.05
+            sesgo_aviso: 0.1
+            sesgo_alerta: 0.2
+            mae_aviso: 1.1
+            mae_alerta: 1.25
+            margen_linea_base: 0.02
+          escenarios:
+            sin_drift:
+              tipo: demanda
+              factor: 1.0
+            aumento_demanda:
+              tipo: demanda
+              factor: 1.3
+            error_pipeline_conteos:
+              tipo: features
+              columnas:
+              - salidas_lag_24h
+              - salidas_lag_48h
+              - salidas_lag_168h
+              - llegadas_lag_24h
+              - llegadas_lag_168h
+              - media_7d
+              factor: 2.0
+            feature_faltante:
+              tipo: faltantes
+              columnas:
+              - media_7d
+              - salidas_sistema_lag_24h
+              fraccion: 0.5
+            temporada_vacaciones:
+              tipo: estacional
+              factor: 0.6
+              mes: 12
+        problema:
+          objetivos:
+          - salidas
+          - llegadas
+          hora_pronostico: 0
+          horizonte_horas: 24
+          rezago_minimo_horas: 24
+          horas_pico:
+          - 7
+          - 8
+          - 9
+          - 17
+          - 18
+          - 19
+        validacion:
+          columna_tiempo: hora_inicio
+          primer_mes_prueba: 2026-04
+          n_cortes: 6
+          meses_prueba: 1
+          meses_entrenamiento: 12
+    outs:
+    - path: reports/drift/psi_por_columna.csv
+      hash: md5
+      md5: 00947bb8c43dd175bf9e0be723c62633
+      size: 1705
+    - path: reports/drift/resumen_drift.csv
+      hash: md5
+      md5: f48903205ff1a89ef0c3ed9f488ead9e
+      size: 2415
+    - path: reports/figures/drift_mae.png
+      hash: md5
+      md5: 7c6c6116c4a2de6e9acb4d5f03aa3a61
+      size: 44611
+    - path: reports/figures/drift_psi.png
+      hash: md5
+      md5: f8fb74189f142fa4a215da0b8e169b86
+      size: 45061
+    - path: reports/figures/drift_sesgo.png
+      hash: md5
+      md5: a573b62e94f2a1a2fa62411c0233d535
+      size: 43515

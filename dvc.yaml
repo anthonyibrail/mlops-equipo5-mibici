@@ -1,0 +1,150 @@
+# Pipeline reproducible del proyecto MiBici con DVC (Entrega Final).
+#
+# Uso rapido:
+#   dvc repro          -- Ejecuta solo los stages con inputs modificados
+#   dvc repro -f       -- Fuerza la re-ejecucion de todos los stages
+#   dvc dag            -- Muestra el grafo de dependencias
+#   dvc params show    -- Muestra los parametros rastreados en params.yaml
+#   dvc status         -- Compara el estado actual con el ultimo dvc repro
+#
+# Prerequisito: haber descargado los datos con `make download` o
+#   `python -m mibici.dataset download --start 2024-01 --end 2026-09`
+
+stages:
+
+  # -------------------------------------------------------------------------
+  # Etapa 1: ingesta, limpieza y versionado de datos
+  # Input : data/raw/ (CSV mensuales, generados por make download)
+  # Output: data/interim/trips_v0.parquet  -- viajes crudos unificados
+  #         data/interim/trips_v1.parquet  -- viajes limpios
+  # -------------------------------------------------------------------------
+  data:
+    cmd: >-
+      python -m mibici.dataset build &&
+      python -m mibici.cleaning &&
+      python -m mibici.versioning v0 &&
+      python -m mibici.versioning v1 --parent v0
+    deps:
+      - mibici/dataset.py
+      - mibici/cleaning.py
+      - mibici/versioning.py
+      - data/raw/
+    outs:
+      - data/interim/trips_v0.parquet
+      - data/interim/trips_v1.parquet
+
+  # -------------------------------------------------------------------------
+  # Etapa 2: ingenieria de features (panel v3 sin fuga de informacion)
+  # Input : data/interim/trips_v1.parquet
+  # Output: data/processed/demand_features_v3.parquet (11.3 M filas x 20 cols)
+  # Params rastreados: problema (objetivos, rezago_minimo_horas, horas_pico)
+  # -------------------------------------------------------------------------
+  features:
+    cmd: >-
+      python -m mibici.features build-v3 &&
+      python -m mibici.versioning v3 --parent v1 --date-col hora_inicio
+    deps:
+      - mibici/features.py
+      - mibici/versioning.py
+      - data/interim/trips_v1.parquet
+    params:
+      - params.yaml:
+          - problema
+    outs:
+      - data/processed/demand_features_v3.parquet
+
+  # -------------------------------------------------------------------------
+  # Etapa 3: lineas base + train simple + evaluacion walk-forward + registro
+  #
+  # Orden interno obligatorio:
+  #   1. validation    -- registra lineas base en MLflow (promote.py las necesita)
+  #   2. train         -- entrena con params fijos, guarda models/pipeline_*.pkl
+  #   3. tune evaluate -- walk-forward de 6 cortes (crea walk_forward_6_cortes.csv)
+  #   4. register      -- refit final con winners, sube al MLflow Model Registry
+  #   5. promote       -- asigna @champion si supera a la linea base en 3 criterios
+  #
+  # train.py crea los pkl locales que usa predict --source local.
+  # register.py hace un refit final con tuning_winners.json y sube al Registry;
+  # NO sobreescribe los pkl locales.
+  # -------------------------------------------------------------------------
+  train:
+    cmd: >-
+      python -m mibici.modeling.validation &&
+      python -m mibici.modeling.train &&
+      python -m mibici.modeling.tune evaluate &&
+      python -m mibici.modeling.register &&
+      python -m mibici.modeling.promote
+    deps:
+      - mibici/modeling/validation.py
+      - mibici/modeling/train.py
+      - mibici/modeling/tune.py
+      - mibici/modeling/register.py
+      - mibici/modeling/promote.py
+      - mibici/modeling/__init__.py
+      - data/processed/demand_features_v3.parquet
+      - reports/model_selection/tuning_winners.json
+    params:
+      - params.yaml:
+          - modelos
+          - validacion
+          - mlflow
+          - promocion
+    outs:
+      - models/pipeline_salidas.pkl
+      - models/pipeline_llegadas.pkl
+    metrics:
+      - reports/model_selection/walk_forward_6_cortes.csv:
+          cache: false
+
+  # -------------------------------------------------------------------------
+  # Etapa 4: inferencia con el modelo entrenado localmente
+  # Usa los pkl generados en la etapa train (no el Model Registry).
+  # Output: data/processed/predicciones.parquet
+  # -------------------------------------------------------------------------
+  predict:
+    cmd: python -m mibici.modeling.predict --source local
+    deps:
+      - mibici/modeling/predict.py
+      - models/pipeline_salidas.pkl
+      - models/pipeline_llegadas.pkl
+      - data/processed/demand_features_v3.parquet
+    params:
+      - params.yaml:
+          - datos
+    outs:
+      - data/processed/predicciones.parquet
+
+  # -------------------------------------------------------------------------
+  # Etapa 5: simulacion de data drift y deteccion de perdida de desempeno
+  # Genera 5 escenarios sinteticos a partir del primer mes de prueba,
+  # calcula PSI por columna y compara MAE contra la linea base.
+  # Outputs:
+  #   reports/drift/resumen_drift.csv    -- estado (OK/AVISO/ALERTA) por escenario
+  #   reports/drift/psi_por_columna.csv  -- PSI por columna y escenario
+  #   reports/figures/drift_*.png        -- graficas de PSI, sesgo y MAE
+  # -------------------------------------------------------------------------
+  drift:
+    cmd: python -m mibici.modeling.drift --source local
+    deps:
+      - mibici/modeling/drift.py
+      - mibici/modeling/predict.py
+      - mibici/modeling/__init__.py
+      - models/pipeline_salidas.pkl
+      - models/pipeline_llegadas.pkl
+      - data/processed/demand_features_v3.parquet
+    params:
+      - params.yaml:
+          - drift
+          - validacion
+          - problema
+    outs:
+      - reports/drift/resumen_drift.csv:
+          cache: false
+      - reports/drift/psi_por_columna.csv:
+          cache: false
+      - reports/figures/drift_psi.png:
+          cache: false
+      - reports/figures/drift_sesgo.png:
+          cache: false
+      - reports/figures/drift_mae.png:
+          cache: false
